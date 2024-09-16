@@ -1,12 +1,17 @@
 import { Request, Response } from "express";
 import prisma from "../DB/db.config";
-import { generateRandom, imageValidator, removeImage } from "../utils/helper";
+import {
+  formatError,
+  generateRandom,
+  imageValidator,
+  removeImage,
+} from "../utils/helper";
 import { UploadedFile } from "express-fileupload";
 import {
   createMovieSchema,
   updateMovieSchema,
 } from "../validation/userdataValidation";
-import { z } from "zod";
+import { z, ZodError } from "zod";
 import fs from "fs";
 import path from "path";
 import { promises } from "dns";
@@ -93,12 +98,13 @@ export const createMovie = async (
       message: "Movie created successfully",
       movie,
     });
-  } catch (err) {
-    if (err instanceof z.ZodError) {
-      return res.status(400).json({ errors: err.errors });
+  } catch (error: any) {
+    if (error instanceof ZodError) {
+      const errors = formatError(error);
+      return res.status(422).json({ message: "Invalid data", errors });
+    } else {
+      return res.status(500).json({ message: "Something wrong" });
     }
-    console.error("Error creating movie:", err);
-    return res.status(500).json({ message: "Error creating movie" });
   }
 };
 
@@ -153,7 +159,6 @@ export const getAllMovies = async (
       movies: formattedMovies,
     });
   } catch (err) {
-    console.error("Error fetching movies:", err);
     return res.status(500).json({ message: "Error fetching movies" });
   }
 };
@@ -246,12 +251,13 @@ export const updateMovie = async (
       message: "Movie updated successfully",
       movie: updatedMovie,
     });
-  } catch (err) {
-    if (err instanceof z.ZodError) {
-      return res.status(400).json({ errors: err.errors });
+  } catch (error: any) {
+    if (error instanceof ZodError) {
+      const errors = formatError(error);
+      return res.status(422).json({ message: "Invalid data", errors });
+    } else {
+      return res.status(500).json({ message: "Something wrong" });
     }
-    console.error("Error updating movie:", err);
-    return res.status(500).json({ message: "Error updating movie" });
   }
 };
 
@@ -284,7 +290,6 @@ export const deleteMovie = async (
 
     return res.json({ message: "Movie deleted successfully" });
   } catch (err) {
-    console.error("Error deleting movie:", err);
     return res.status(500).json({ message: "Error deleting movie" });
   }
 };
