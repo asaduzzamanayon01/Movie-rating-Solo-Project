@@ -4,6 +4,7 @@ import React, { useState, useContext } from "react";
 import { useRouter } from "next/navigation";
 import { AuthContext } from "../../app/context/AuthContext";
 import { toast } from "sonner";
+import Link from "next/link";
 
 interface FormData {
   firstName: string;
@@ -99,138 +100,148 @@ const RegisterForm = () => {
   };
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="space-y-6 bg-white p-6 shadow-md rounded-lg max-w-md mx-auto"
-    >
-      <h1 className="text-2xl font-semibold text-center text-gray-800">
-        Register
-      </h1>
+    <div className="bg-white p-6 shadow-md rounded-lg">
+      <form onSubmit={handleSubmit} className="space-y-5 max-w-md mx-auto">
+        <h1 className="text-4xl text-center font-extrabold bg-gradient-to-r from-pink-400 to-red-500 text-transparent bg-clip-text">
+          Rotten Tomatoes
+        </h1>
+        <h1 className="text-3xl font-bold">Register</h1>
 
-      {/* First Name */}
-      <div>
-        <input
-          type="text"
-          name="firstName"
-          placeholder="First Name"
-          value={formData.firstName}
-          onChange={handleChange}
-          className={`w-full px-3 py-2 border rounded ${
-            errors.firstName ? "border-red-500" : "border-gray-300"
-          }`}
-        />
-        {errors.firstName && (
-          <p className="text-red-500 text-sm">{errors.firstName}</p>
-        )}
-      </div>
+        {/* First Name */}
+        <div>
+          <input
+            type="text"
+            name="firstName"
+            placeholder="First Name"
+            value={formData.firstName}
+            onChange={handleChange}
+            className={`w-full px-3 py-2 border rounded ${
+              errors.firstName ? "border-red-500" : "border-gray-300"
+            }`}
+          />
+          {errors.firstName && (
+            <p className="text-red-500 text-sm">{errors.firstName}</p>
+          )}
+        </div>
 
-      {/* Last Name */}
-      <div>
-        <input
-          type="text"
-          name="lastName"
-          placeholder="Last Name"
-          value={formData.lastName}
-          onChange={handleChange}
-          className={`w-full px-3 py-2 border rounded ${
-            errors.lastName ? "border-red-500" : "border-gray-300"
-          }`}
-        />
-        {errors.lastName && (
-          <p className="text-red-500 text-sm">{errors.lastName}</p>
-        )}
-      </div>
+        {/* Last Name */}
+        <div>
+          <input
+            type="text"
+            name="lastName"
+            placeholder="Last Name"
+            value={formData.lastName}
+            onChange={handleChange}
+            className={`w-full px-3 py-2 border rounded ${
+              errors.lastName ? "border-red-500" : "border-gray-300"
+            }`}
+          />
+          {errors.lastName && (
+            <p className="text-red-500 text-sm">{errors.lastName}</p>
+          )}
+        </div>
 
-      {/* Email */}
-      <div>
-        <input
-          type="email"
-          name="email"
-          placeholder="Email"
-          value={formData.email}
-          onChange={handleChange}
-          className={`w-full px-3 py-2 border rounded ${
-            errors.email ? "border-red-500" : "border-gray-300"
-          }`}
-        />
-        {errors.email && <p className="text-red-500 text-sm">{errors.email}</p>}
-      </div>
+        {/* Email */}
+        <div>
+          <input
+            type="email"
+            name="email"
+            placeholder="Email"
+            value={formData.email}
+            onChange={handleChange}
+            className={`w-full px-3 py-2 border rounded ${
+              errors.email ? "border-red-500" : "border-gray-300"
+            }`}
+          />
+          {errors.email && (
+            <p className="text-red-500 text-sm">{errors.email}</p>
+          )}
+        </div>
 
-      {/* Phone (Optional) */}
-      <div>
-        <input
-          type="tel"
-          name="phone"
-          placeholder="Phone (Optional)"
-          value={formData.phone}
-          onChange={handleChange}
-          className={`w-full px-3 py-2 border rounded ${
-            errors.phone ? "border-red-500" : "border-gray-300"
-          }`}
-        />
-        {errors.phone && <p className="text-red-500 text-sm">{errors.phone}</p>}
-      </div>
+        {/* Phone (Optional) */}
+        <div>
+          <input
+            type="tel"
+            name="phone"
+            placeholder="Phone (Optional)"
+            value={formData.phone}
+            onChange={handleChange}
+            className={`w-full px-3 py-2 border rounded ${
+              errors.phone ? "border-red-500" : "border-gray-300"
+            }`}
+          />
+          {errors.phone && (
+            <p className="text-red-500 text-sm">{errors.phone}</p>
+          )}
+        </div>
 
-      {/* Address */}
-      <div>
-        <input
-          type="text"
-          name="address"
-          placeholder="Enter Address"
-          value={formData.address}
-          onChange={handleChange}
-          className={`w-full px-3 py-2 border rounded ${
-            errors.address ? "border-red-500" : "border-gray-300"
-          }`}
-        />
-        {errors.address && (
-          <p className="text-red-500 text-sm">{errors.address}</p>
-        )}
-      </div>
+        {/* Address */}
+        <div>
+          <input
+            type="text"
+            name="address"
+            placeholder="Enter Address"
+            value={formData.address}
+            onChange={handleChange}
+            className={`w-full px-3 py-2 border rounded ${
+              errors.address ? "border-red-500" : "border-gray-300"
+            }`}
+          />
+          {errors.address && (
+            <p className="text-red-500 text-sm">{errors.address}</p>
+          )}
+        </div>
 
-      {/* Password */}
-      <div>
-        <input
-          type="password"
-          name="password"
-          placeholder="Password"
-          value={formData.password}
-          onChange={handleChange}
-          className={`w-full px-3 py-2 border rounded ${
-            errors.password ? "border-red-500" : "border-gray-300"
-          }`}
-        />
-        {errors.password && (
-          <p className="text-red-500 text-sm">{errors.password}</p>
-        )}
-      </div>
+        {/* Password */}
+        <div>
+          <input
+            type="password"
+            name="password"
+            placeholder="Password"
+            value={formData.password}
+            onChange={handleChange}
+            className={`w-full px-3 py-2 border rounded ${
+              errors.password ? "border-red-500" : "border-gray-300"
+            }`}
+          />
+          {errors.password && (
+            <p className="text-red-500 text-sm">{errors.password}</p>
+          )}
+        </div>
 
-      {/* Confirm Password */}
-      <div>
-        <input
-          type="password"
-          name="confirm_password"
-          placeholder="Confirm Password"
-          value={formData.confirm_password}
-          onChange={handleChange}
-          className={`w-full px-3 py-2 border rounded ${
-            errors.confirm_password ? "border-red-500" : "border-gray-300"
-          }`}
-        />
-        {errors.confirm_password && (
-          <p className="text-red-500 text-sm">{errors.confirm_password}</p>
-        )}
-      </div>
+        {/* Confirm Password */}
+        <div>
+          <input
+            type="password"
+            name="confirm_password"
+            placeholder="Confirm Password"
+            value={formData.confirm_password}
+            onChange={handleChange}
+            className={`w-full px-3 py-2 border rounded ${
+              errors.confirm_password ? "border-red-500" : "border-gray-300"
+            }`}
+          />
+          {errors.confirm_password && (
+            <p className="text-red-500 text-sm">{errors.confirm_password}</p>
+          )}
+        </div>
 
-      {/* Submit Button */}
-      <button
-        type="submit"
-        disabled={loading}
-        className="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold px-4 py-2 rounded focus:outline-none focus:ring"
-      >
-        {loading ? "Submitting..." : "Register"}
-      </button>
-    </form>
+        {/* Submit Button */}
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold px-4 py-2 rounded focus:outline-none focus:ring"
+        >
+          {loading ? "Submitting..." : "Register"}
+        </button>
+      </form>
+      <p className="text-center mt-2">
+        Already have an account ?{" "}
+        <strong>
+          <Link href="/login">Login</Link>
+        </strong>
+      </p>
+    </div>
   );
 };
 
