@@ -137,21 +137,21 @@ export const getAllMovies = async (
       },
     });
 
-    // Format the response to be more user-friendly
+    // Format the response
     const formattedMovies = movies.map((movie) => ({
       id: movie.id,
       title: movie.title,
-      image: `${process.env.APP_URL}/images/${movie.image}`, // Add full image URL
+      image: `${process.env.APP_URL}/images/${movie.image}`,
       releaseDate: movie.releaseDate,
       type: movie.type,
       certificate: movie.certificate,
-      createdBy: `${movie.user.firstName} ${movie.user.lastName}`, // Full name of the user who created the movie
-      genres: movie.genres.map((g) => g.genre.name), // List of genre names
+      createdBy: `${movie.user.firstName} ${movie.user.lastName}`,
+      genres: movie.genres.map((g) => g.genre.name),
       averageRating:
         movie.ratings.length > 0
           ? movie.ratings.reduce((acc, rating) => acc + rating.score, 0) /
-            movie.ratings.length // Calculate average rating
-          : null, // If no ratings, set it as null
+            movie.ratings.length
+          : null,
     }));
 
     return res.json({
