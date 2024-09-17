@@ -3,7 +3,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.updateMovieSchema = exports.createMovieSchema = exports.loginSchemaValidation = exports.userSchemaValidation = void 0;
 const zod_1 = require("zod");
 // User registration validation schema with Zod
-exports.userSchemaValidation = zod_1.z.object({
+exports.userSchemaValidation = zod_1.z
+    .object({
     firstName: zod_1.z
         .string()
         .min(1, "First name must have at least 1 character")
@@ -17,10 +18,19 @@ exports.userSchemaValidation = zod_1.z.object({
         .string()
         .min(1, "Address must have at least 1 character")
         .max(100, "Address must not exceed 100 characters"),
+    phone: zod_1.z.string().max(20, "phone number required").optional(),
     password: zod_1.z
         .string()
         .min(8, "Password must have at least 8 characters")
         .max(150, "Password must not exceed 150 characters"),
+    confirm_password: zod_1.z
+        .string()
+        .min(8, "Confirm password must have at least 8 characters")
+        .max(150, "Confirm password must not exceed 150 characters"),
+})
+    .refine((data) => data.password === data.confirm_password, {
+    message: "Confirm password not matched",
+    path: ["confirm_password"],
 });
 // User login validation schema with Zod
 exports.loginSchemaValidation = zod_1.z.object({

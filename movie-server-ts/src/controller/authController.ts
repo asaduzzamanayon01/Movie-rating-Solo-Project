@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { z } from "zod";
+import { ZodError } from "zod";
 import prisma from "../DB/db.config";
 import {
   loginSchemaValidation,
@@ -7,6 +7,7 @@ import {
 } from "../validation/userdataValidation";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import { formatError } from "../utils/helper";
 
 export const register = async (
   req: Request,
@@ -44,7 +45,7 @@ export const register = async (
         firstName: payload.firstName,
         lastName: payload.lastName,
         email: payload.email,
-        phone: body.phone, // Assuming this is validated elsewhere
+        phone: payload.phone,
         address: payload.address,
         password: hashedPassword,
       },
@@ -52,7 +53,15 @@ export const register = async (
 
     return res.status(201).json({ message: "Successfully created user" });
   } catch (error: any) {
-    return res.status(500).json({ error: error.message });
+    if (error instanceof ZodError) {
+      const errors = formatError(error);
+      return res.status(422).json({
+        message: "Invalid data",
+        errors,
+      });
+    } else {
+      return res.status(500).json({ message: "Something wrong" });
+    }
   }
 };
 
@@ -98,6 +107,11 @@ export const login = async (req: Request, res: Response): Promise<Response> => {
       },
     });
   } catch (error: any) {
-    return res.status(500).json({ error: error.message });
+    if (error instanceof ZodError) {
+      const errors = formatError(error);
+      return res.status(422).json({ message: "Invalid data", errors });
+    } else {
+      return res.status(500).json({ message: "Something wrong" });
+    }
   }
 };

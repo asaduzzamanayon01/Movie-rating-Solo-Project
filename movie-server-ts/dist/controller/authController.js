@@ -13,10 +13,12 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.login = exports.register = void 0;
+const zod_1 = require("zod");
 const db_config_1 = __importDefault(require("../DB/db.config"));
 const userdataValidation_1 = require("../validation/userdataValidation");
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
+const helper_1 = require("../utils/helper");
 const register = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const body = req.body;
@@ -43,7 +45,7 @@ const register = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
                 firstName: payload.firstName,
                 lastName: payload.lastName,
                 email: payload.email,
-                phone: body.phone, // Assuming this is validated elsewhere
+                phone: payload.phone,
                 address: payload.address,
                 password: hashedPassword,
             },
@@ -51,7 +53,16 @@ const register = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         return res.status(201).json({ message: "Successfully created user" });
     }
     catch (error) {
-        return res.status(500).json({ error: error.message });
+        if (error instanceof zod_1.ZodError) {
+            const errors = (0, helper_1.formatError)(error);
+            return res.status(422).json({
+                message: "Invalid data",
+                errors,
+            });
+        }
+        else {
+            return res.status(500).json({ message: "Something wrong" });
+        }
     }
 });
 exports.register = register;
@@ -88,7 +99,13 @@ const login = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         });
     }
     catch (error) {
-        return res.status(500).json({ error: error.message });
+        if (error instanceof zod_1.ZodError) {
+            const errors = (0, helper_1.formatError)(error);
+            return res.status(422).json({ message: "Invalid data", errors });
+        }
+        else {
+            return res.status(500).json({ message: "Something wrong" });
+        }
     }
 });
 exports.login = login;

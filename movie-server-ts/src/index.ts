@@ -1,4 +1,4 @@
-import express from "express";
+import express, { urlencoded } from "express";
 import dotenv from "dotenv";
 import mainRouter from "./router/mainRoute";
 import fileUpload from "express-fileupload";
@@ -9,9 +9,10 @@ const port = process.env.PORT;
 
 const app = express();
 app.use(fileUpload());
-app.use(cors());
+app.use(cors({ origin: "http://localhost:3000" }));
 app.use(express.json());
 app.use(express.static("public"));
+app.use(urlencoded({ extended: false }));
 app.use("/api", mainRouter);
 
 app.listen(port, () => {

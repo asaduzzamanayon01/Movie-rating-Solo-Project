@@ -84,12 +84,14 @@ const createMovie = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
             movie,
         });
     }
-    catch (err) {
-        if (err instanceof zod_1.z.ZodError) {
-            return res.status(400).json({ errors: err.errors });
+    catch (error) {
+        if (error instanceof zod_1.ZodError) {
+            const errors = (0, helper_1.formatError)(error);
+            return res.status(422).json({ message: "Invalid data", errors });
         }
-        console.error("Error creating movie:", err);
-        return res.status(500).json({ message: "Error creating movie" });
+        else {
+            return res.status(500).json({ message: "Something wrong" });
+        }
     }
 });
 exports.createMovie = createMovie;
@@ -118,20 +120,20 @@ const getAllMovies = (req, res) => __awaiter(void 0, void 0, void 0, function* (
                 },
             },
         });
-        // Format the response to be more user-friendly
+        // Format the response
         const formattedMovies = movies.map((movie) => ({
             id: movie.id,
             title: movie.title,
-            image: `${process.env.APP_URL}/images/${movie.image}`, // Add full image URL
+            image: `${process.env.APP_URL}/images/${movie.image}`,
             releaseDate: movie.releaseDate,
             type: movie.type,
             certificate: movie.certificate,
-            createdBy: `${movie.user.firstName} ${movie.user.lastName}`, // Full name of the user who created the movie
-            genres: movie.genres.map((g) => g.genre.name), // List of genre names
+            createdBy: `${movie.user.firstName} ${movie.user.lastName}`,
+            genres: movie.genres.map((g) => g.genre.name),
             averageRating: movie.ratings.length > 0
                 ? movie.ratings.reduce((acc, rating) => acc + rating.score, 0) /
-                    movie.ratings.length // Calculate average rating
-                : null, // If no ratings, set it as null
+                    movie.ratings.length
+                : null,
         }));
         return res.json({
             message: "Movies fetched successfully",
@@ -139,7 +141,6 @@ const getAllMovies = (req, res) => __awaiter(void 0, void 0, void 0, function* (
         });
     }
     catch (err) {
-        console.error("Error fetching movies:", err);
         return res.status(500).json({ message: "Error fetching movies" });
     }
 });
@@ -212,12 +213,14 @@ const updateMovie = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
             movie: updatedMovie,
         });
     }
-    catch (err) {
-        if (err instanceof zod_1.z.ZodError) {
-            return res.status(400).json({ errors: err.errors });
+    catch (error) {
+        if (error instanceof zod_1.ZodError) {
+            const errors = (0, helper_1.formatError)(error);
+            return res.status(422).json({ message: "Invalid data", errors });
         }
-        console.error("Error updating movie:", err);
-        return res.status(500).json({ message: "Error updating movie" });
+        else {
+            return res.status(500).json({ message: "Something wrong" });
+        }
     }
 });
 exports.updateMovie = updateMovie;
@@ -243,7 +246,6 @@ const deleteMovie = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
         return res.json({ message: "Movie deleted successfully" });
     }
     catch (err) {
-        console.error("Error deleting movie:", err);
         return res.status(500).json({ message: "Error deleting movie" });
     }
 });

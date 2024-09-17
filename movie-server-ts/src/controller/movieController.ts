@@ -1,12 +1,17 @@
 import { Request, Response } from "express";
 import prisma from "../DB/db.config";
-import { generateRandom, imageValidator, removeImage } from "../utils/helper";
+import {
+  formatError,
+  generateRandom,
+  imageValidator,
+  removeImage,
+} from "../utils/helper";
 import { UploadedFile } from "express-fileupload";
 import {
   createMovieSchema,
   updateMovieSchema,
 } from "../validation/userdataValidation";
-import { z } from "zod";
+import { z, ZodError } from "zod";
 import fs from "fs";
 import path from "path";
 import { promises } from "dns";
@@ -93,12 +98,13 @@ export const createMovie = async (
       message: "Movie created successfully",
       movie,
     });
-  } catch (err) {
-    if (err instanceof z.ZodError) {
-      return res.status(400).json({ errors: err.errors });
+  } catch (error: any) {
+    if (error instanceof ZodError) {
+      const errors = formatError(error);
+      return res.status(422).json({ message: "Invalid data", errors });
+    } else {
+      return res.status(500).json({ message: "Something wrong" });
     }
-    console.error("Error creating movie:", err);
-    return res.status(500).json({ message: "Error creating movie" });
   }
 };
 
@@ -131,21 +137,21 @@ export const getAllMovies = async (
       },
     });
 
-    // Format the response to be more user-friendly
+    // Format the response
     const formattedMovies = movies.map((movie) => ({
       id: movie.id,
       title: movie.title,
-      image: `${process.env.APP_URL}/images/${movie.image}`, // Add full image URL
+      image: `${process.env.APP_URL}/images/${movie.image}`,
       releaseDate: movie.releaseDate,
       type: movie.type,
       certificate: movie.certificate,
-      createdBy: `${movie.user.firstName} ${movie.user.lastName}`, // Full name of the user who created the movie
-      genres: movie.genres.map((g) => g.genre.name), // List of genre names
+      createdBy: `${movie.user.firstName} ${movie.user.lastName}`,
+      genres: movie.genres.map((g) => g.genre.name),
       averageRating:
         movie.ratings.length > 0
           ? movie.ratings.reduce((acc, rating) => acc + rating.score, 0) /
-            movie.ratings.length // Calculate average rating
-          : null, // If no ratings, set it as null
+            movie.ratings.length
+          : null,
     }));
 
     return res.json({
@@ -153,7 +159,6 @@ export const getAllMovies = async (
       movies: formattedMovies,
     });
   } catch (err) {
-    console.error("Error fetching movies:", err);
     return res.status(500).json({ message: "Error fetching movies" });
   }
 };
@@ -246,12 +251,13 @@ export const updateMovie = async (
       message: "Movie updated successfully",
       movie: updatedMovie,
     });
-  } catch (err) {
-    if (err instanceof z.ZodError) {
-      return res.status(400).json({ errors: err.errors });
+  } catch (error: any) {
+    if (error instanceof ZodError) {
+      const errors = formatError(error);
+      return res.status(422).json({ message: "Invalid data", errors });
+    } else {
+      return res.status(500).json({ message: "Something wrong" });
     }
-    console.error("Error updating movie:", err);
-    return res.status(500).json({ message: "Error updating movie" });
   }
 };
 
@@ -284,7 +290,6 @@ export const deleteMovie = async (
 
     return res.json({ message: "Movie deleted successfully" });
   } catch (err) {
-    console.error("Error deleting movie:", err);
     return res.status(500).json({ message: "Error deleting movie" });
   }
 };
