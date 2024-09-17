@@ -1,0 +1,75 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id         Int       @id @default(autoincrement())
+  firstName  String    @db.VarChar(50)
+  lastName   String    @db.VarChar(50)
+  profile   String?    @db.VarChar(150)
+  email      String    @unique @db.VarChar(50)
+  phone      String?   @db.VarChar(20)
+  address    String   @db.VarChar(100)
+  password   String    @db.VarChar(100)
+  status     Int       @default(1)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  movies     Movie[]   @relation("CreatedBy")
+  ratings    Rate[]    @relation("RatedBy")
+}
+
+model Movie {
+  id           Int       @id @default(autoincrement())
+  title        String    @db.VarChar(100)
+  image        String    @db.VarChar(100)
+  releaseDate  Int
+  votes        Int?       
+  duration     Int?
+  type         String    @db.VarChar(50) 
+  certificate  String?   @db.VarChar(20)
+  episodes     Int?
+  nudity       String?   @db.VarChar(20)
+  violence     String?   @db.VarChar(20)
+  profanity    String?   @db.VarChar(20)
+  alcohol      String?   @db.VarChar(20)
+  frightening  String?   @db.VarChar(20)
+  createdBy    Int    
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  user         User      @relation("CreatedBy", fields: [createdBy], references: [id])
+  ratings      Rate[]    @relation("MovieRated")
+  genres       MovieGenre[]
+}
+
+model Genre {
+  id      Int         @id @default(autoincrement())
+  name    String      @db.VarChar(20) @default("Unknown")
+  movies  MovieGenre[]
+}
+
+model MovieGenre {
+  movieId  Int
+  genreId  Int
+  movie    Movie   @relation(fields: [movieId], references: [id], onDelete: Cascade)
+  genre    Genre   @relation(fields: [genreId], references: [id], onDelete: Cascade)
+
+  @@id([movieId, genreId]) // Composite primary key
+}
+
+model Rate {
+  id         Int       @id @default(autoincrement())
+  score      Float
+  movieId    Int
+  userId     Int
+  createdAt  DateTime  @default(now())
+  
+  movie      Movie     @relation("MovieRated", fields: [movieId], references: [id])
+  user       User      @relation("RatedBy", fields: [userId], references: [id])
+
+  @@unique([userId, movieId]) // Enforces the unique constraint
+}
