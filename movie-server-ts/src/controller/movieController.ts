@@ -143,10 +143,10 @@ export const getAllMovies = async (
       title: movie.title,
       image: `${process.env.APP_URL}/images/${movie.image}`,
       releaseDate: movie.releaseDate,
-      type: movie.type,
-      certificate: movie.certificate,
-      createdBy: `${movie.user.firstName} ${movie.user.lastName}`,
-      genres: movie.genres.map((g) => g.genre.name),
+      // type: movie.type,
+      // certificate: movie.certificate,
+      // createdBy: `${movie.user.firstName} ${movie.user.lastName}`,
+      // genres: movie.genres.map((g) => g.genre.name),
       averageRating:
         movie.ratings.length > 0
           ? movie.ratings.reduce((acc, rating) => acc + rating.score, 0) /
@@ -301,8 +301,8 @@ export const addRating = async (req: AuthenticatedRequest, res: Response) => {
     const userId = req.user?.id; // Assuming user is authenticated and req.user is available
 
     // Validate if score is between 0 and 10
-    if (score < 0 || score > 10) {
-      return res.status(400).json({ error: "Score must be between 0 and 10." });
+    if (score < 0 || score > 5) {
+      return res.status(400).json({ error: "Score must be between 0 and 5." });
     }
 
     // Check if the user has already rated this movie
@@ -337,5 +337,136 @@ export const addRating = async (req: AuthenticatedRequest, res: Response) => {
     return res
       .status(500)
       .json({ error: "An error occurred while adding the rating." });
+  }
+};
+
+// Fetch Movie by ID Controller
+export const getMovieById = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { id } = req.params;
+
+  try {
+    // Fetch the movie from the database by its ID, along with related genres, creator, and ratings
+    const movie = await prisma.movie.findUnique({
+      where: { id: parseInt(id) },
+      include: {
+        genres: {
+          select: {
+            genre: true, // Include genre details
+          },
+        },
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true, // Include movie creator details
+          },
+        },
+        ratings: {
+          select: {
+            score: true, // Include ratings
+          },
+        },
+      },
+    });
+
+    // Check if the movie exists
+    if (!movie) {
+      return res.status(404).json({ message: "Movie not found" });
+    }
+
+    // Format the movie response
+    const formattedMovie = {
+      id: movie.id,
+      title: movie.title,
+      image: `${process.env.APP_URL}/images/${movie.image}`,
+      releaseDate: movie.releaseDate,
+      type: movie.type,
+      certificate: movie.certificate,
+      createdBy: `${movie.user.firstName} ${movie.user.lastName}`,
+      genres: movie.genres.map((g) => g.genre.name),
+      averageRating:
+        movie.ratings.length > 0
+          ? movie.ratings.reduce((acc, rating) => acc + rating.score, 0) /
+            movie.ratings.length
+          : null,
+    };
+
+    return res.json({
+      message: "Movie fetched successfully",
+      movie: formattedMovie,
+    });
+  } catch (err) {
+    return res.status(500).json({ message: "Error fetching movie" });
+  }
+};
+
+// Fetch Related Movies Controller (by Genre)
+export const getRelatedMovies = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { id } = req.params;
+
+  try {
+    // Fetch the movie with its genres
+    const movie = await prisma.movie.findUnique({
+      where: { id: parseInt(id) },
+      include: {
+        genres: {
+          select: {
+            genreId: true, // Get genre IDs of the movie
+          },
+        },
+      },
+    });
+
+    if (!movie) {
+      return res.status(404).json({ message: "Movie not found" });
+    }
+
+    // Get genre IDs from the current movie
+    const genreIds = movie.genres.map((g) => g.genreId);
+
+    // Fetch related movies that share at least one genre
+    const relatedMovies = await prisma.movie.findMany({
+      where: {
+        id: {
+          not: movie.id, // Exclude the current movie
+        },
+        genres: {
+          some: {
+            genreId: {
+              in: genreIds, // Find movies that have at least one matching genre
+            },
+          },
+        },
+      },
+      include: {
+        genres: {
+          select: {
+            genre: true, // Include genre details
+          },
+        },
+      },
+      take: 5, // Limit to 5 related movies
+    });
+
+    const formattedMovies = relatedMovies.map((movie) => ({
+      id: movie.id,
+      title: movie.title,
+      image: `${process.env.APP_URL}/images/${movie.image}`,
+      releaseDate: movie.releaseDate,
+      genres: movie.genres.map((g) => g.genre.name),
+    }));
+
+    return res.json({
+      message: "Related movies fetched successfully",
+      relatedMovies: formattedMovies,
+    });
+  } catch (err) {
+    return res.status(500).json({ message: "Error fetching related movies" });
   }
 };
