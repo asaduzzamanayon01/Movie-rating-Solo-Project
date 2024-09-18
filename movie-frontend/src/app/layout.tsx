@@ -4,6 +4,9 @@ import { Toaster } from "sonner";
 import localFont from "next/font/local";
 import "./globals.css";
 import { AuthProvider } from "./context/AuthContext";
+import { Navbar } from "@/components/base/Navbar";
+import Footer from "@/components/base/Footer";
+import "@smastrom/react-rating/style.css";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -30,11 +33,13 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-slate-100`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-black`}
       >
         <AuthProvider>
+          <Navbar />
           <Toaster position="top-right" />
           {children}
+          <Footer />
         </AuthProvider>
       </body>
     </html>

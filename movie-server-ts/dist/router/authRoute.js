@@ -8,4 +8,5 @@ const authController_1 = require("../controller/authController");
 const authRouter = express_1.default.Router();
 authRouter.post("/register", authController_1.register);
 authRouter.post("/login", authController_1.login);
+authRouter.post("/logout", authController_1.logout);
 exports.default = authRouter;

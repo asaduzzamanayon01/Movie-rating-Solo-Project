@@ -4,6 +4,7 @@
 import Link from "next/link";
 import { useContext, useState } from "react";
 import { AuthContext } from "../../app/context/AuthContext";
+import Cookies from "js-cookie";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 interface FormData {
@@ -55,9 +56,15 @@ const LoginForm = () => {
       });
 
       if (response.ok) {
+        const data = await response.json();
+        console.log(data.token);
+        Cookies.set("token", data.token);
+        Cookies.set("userId", data.user.id);
+        Cookies.set("firstName", data.user.firstName);
+        console.log(Cookies.get("token"));
         toast.success("Login Successfully");
         setTimeout(() => {
-          router.push("/");
+          router.push("/movies");
         }, 1000);
       } else {
         const errorData = await response.json();
@@ -120,7 +127,7 @@ const LoginForm = () => {
               errors.password ? "border-red-500" : "border-gray-300"
             }`}
           />
-          {errors.email && (
+          {errors.password && (
             <p className="text-red-500 text-sm">{errors.password}</p>
           )}
         </div>
