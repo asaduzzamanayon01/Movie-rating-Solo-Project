@@ -17,6 +17,7 @@ interface Movie {
   createdBy: string;
   genres: string[];
   averageRating: number | null;
+  description: string | null;
 }
 
 const MovieDetailPage = () => {
@@ -115,41 +116,47 @@ const MovieDetailPage = () => {
           <RelatedMovies movieId={movie.id} />
         </div>
       </div>
-
-      {/* Movie Details Section */}
       <div className="w-full bg-black py-10">
         <div className="container mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="flex flex-col md:flex-row gap-6">
             {/* Movie Information */}
-            <div className="col-span-2">
-              <h2 className="text-4xl font-extrabold mb-6 text-white">
-                {movie.title}
+            <div className="flex-1 bg-gray-800 p-6 rounded-lg shadow-lg">
+              <h2 className="text-4xl font-extrabold mb-6 text-white border-b-2 border-gray-600 pb-2">
+                {movie.title}{" "}
+                <Rating width={100} value={movie.averageRating ?? 0} readOnly />
               </h2>
-              <div className="space-y-4">
-                <p className="text-lg text-white">
-                  <span className="font-semibold">Released:</span>{" "}
-                  {movie.releaseDate}
-                </p>
-                <p className="text-lg text-white">
-                  <span className="font-semibold">Genre:</span>{" "}
-                  {movie.genres.join(", ")}
-                </p>
-                <p className="text-lg text-white">
-                  <span className="font-semibold">Average Rating:</span>{" "}
-                  {movie.averageRating ?? "N/A"}
-                </p>
-                <p className="text-lg text-white">
-                  <span className="font-semibold">Created By:</span>{" "}
-                  {movie.createdBy}
-                </p>
-                <p className="text-lg text-white">
-                  <span className="font-semibold">Type:</span> {movie.type}
-                </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {/* First Row: 2 items */}
+                <div className="bg-gray-900 border border-gray-700 rounded-lg p-4 hover:bg-gray-700 transition-all duration-300">
+                  <p className="text-lg text-white">
+                    <span className="font-semibold">Released:</span>{" "}
+                    {movie.releaseDate}
+                  </p>
+                </div>
+                <div className="bg-gray-900 border border-gray-700 rounded-lg p-4 hover:bg-gray-700 transition-all duration-300">
+                  <p className="text-lg text-white">
+                    <span className="font-semibold">Genre:</span>{" "}
+                    {movie.genres.map((genre) => genre.name).join(", ")}
+                  </p>
+                </div>
+                <div className="bg-gray-900 border border-gray-700 rounded-lg p-4 hover:bg-gray-700 transition-all duration-300">
+                  <p className="text-lg text-white">
+                    <span className="font-semibold">Created By:</span>{" "}
+                    {movie.createdBy}
+                  </p>
+                </div>
+                {/* Full Row: Description */}
+                <div className="col-span-1 md:col-span-2 lg:col-span-3 bg-gray-900 border border-gray-700 rounded-lg p-4 hover:bg-gray-700 transition-all duration-300">
+                  <p className="text-lg text-white">
+                    <span className="font-semibold">Description:</span>{" "}
+                    {movie.description}
+                  </p>
+                </div>
               </div>
             </div>
 
             {/* Movie Poster & Actions */}
-            <div className="bg-gray-50 p-6 rounded-lg shadow-lg space-y-4">
+            <div className="bg-gray-800 p-6 rounded-lg shadow-lg flex-none w-full md:w-1/3 h-fit">
               <img
                 src={movie.image}
                 alt={movie.title}
@@ -157,8 +164,13 @@ const MovieDetailPage = () => {
               />
 
               {/* Star Rating Component */}
-              <div className="text-center">
-                <Rating value={rating} onChange={handleRatingChange} />
+              <div className="text-center mt-4">
+                <Rating
+                  value={rating}
+                  onChange={handleRatingChange}
+                  readOnly={false}
+                  width={500}
+                />
               </div>
             </div>
           </div>

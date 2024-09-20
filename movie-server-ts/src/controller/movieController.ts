@@ -83,8 +83,7 @@ export const createMovie = async (
         title: movieData.title,
         image: imageName,
         releaseDate: movieData.releaseDate,
-        type: movieData.type,
-        certificate: movieData.certificate,
+        description: movieData.description,
         createdBy: userID,
         genres: {
           create: movieData.genres.map((genreId: number) => ({
@@ -113,40 +112,78 @@ export const getAllMovies = async (
   req: Request,
   res: Response
 ): Promise<Response> => {
+  const { page = 1, limit = 18, genre, user } = req.query;
+
+  const pageNumber = parseInt(page as string);
+  const limitNumber = parseInt(limit as string);
+  const skip = (pageNumber - 1) * limitNumber;
+
   try {
-    // Fetch all movies from the database along with related data (genres, creator, ratings)
+    // Create a filter object for genre if provided
+    const genreFilter = genre
+      ? {
+          genres: {
+            some: {
+              genreId: parseInt(genre as string),
+            },
+          },
+        }
+      : {}; // No genre filter if not provided
+
+    // Create a filter for userId if provided
+    const userIdFilter = user
+      ? {
+          createdBy: parseInt(user as string), // Filter by userId
+        }
+      : {}; // No user filter if not provided
+
+    // Combine the filters
+    const combinedFilters = {
+      ...genreFilter,
+      ...userIdFilter, // Both filters will be applied if provided
+    };
+
+    // Fetch movies with pagination, optional genre filter, and optional user filter
     const movies = await prisma.movie.findMany({
+      skip: skip,
+      take: limitNumber,
+      where: combinedFilters,
+      orderBy: {
+        id: "desc",
+      },
       include: {
         genres: {
           select: {
-            genre: true, // Include genre details
+            genre: true,
           },
         },
         user: {
           select: {
             id: true,
             firstName: true,
-            lastName: true, // Include movie creator details
+            lastName: true,
           },
         },
         ratings: {
           select: {
-            score: true, // Include ratings
+            score: true,
           },
         },
       },
+    });
+
+    const totalMovies = await prisma.movie.count({
+      where: combinedFilters,
     });
 
     // Format the response
     const formattedMovies = movies.map((movie) => ({
       id: movie.id,
       title: movie.title,
-      image: `${process.env.APP_URL}/images/${movie.image}`,
+      image: movie.image.startsWith("http")
+        ? movie.image
+        : `${process.env.APP_URL}/images/${movie.image}`,
       releaseDate: movie.releaseDate,
-      // type: movie.type,
-      // certificate: movie.certificate,
-      // createdBy: `${movie.user.firstName} ${movie.user.lastName}`,
-      // genres: movie.genres.map((g) => g.genre.name),
       averageRating:
         movie.ratings.length > 0
           ? movie.ratings.reduce((acc, rating) => acc + rating.score, 0) /
@@ -157,6 +194,7 @@ export const getAllMovies = async (
     return res.json({
       message: "Movies fetched successfully",
       movies: formattedMovies,
+      totalMovies,
     });
   } catch (err) {
     return res.status(500).json({ message: "Error fetching movies" });
@@ -234,8 +272,6 @@ export const updateMovie = async (
         title: movieData.title || movie.title,
         image: imageName,
         releaseDate: movieData.releaseDate || movie.releaseDate,
-        type: movieData.type || movie.type,
-        certificate: movieData.certificate || movie.certificate,
         genres: movieData.genres
           ? {
               deleteMany: {},
@@ -261,7 +297,6 @@ export const updateMovie = async (
   }
 };
 
-// Delete Movie Controller
 export const deleteMovie = async (
   req: Request,
   res: Response
@@ -269,9 +304,15 @@ export const deleteMovie = async (
   const { id } = req.params;
 
   try {
+    // Check if the id is a valid number
+    const movieId = parseInt(id);
+    if (isNaN(movieId)) {
+      return res.status(400).json({ message: "Invalid movie ID" });
+    }
+
     // Check if the movie exists
     const movie = await prisma.movie.findUnique({
-      where: { id: parseInt(id) },
+      where: { id: movieId },
     });
 
     if (!movie) {
@@ -285,12 +326,15 @@ export const deleteMovie = async (
 
     // Delete the movie from the database
     await prisma.movie.delete({
-      where: { id: parseInt(id) },
+      where: { id: movieId },
     });
 
     return res.json({ message: "Movie deleted successfully" });
   } catch (err) {
-    return res.status(500).json({ message: "Error deleting movie" });
+    console.error("Error deleting movie:", err); // Log the error for debugging
+    return res
+      .status(500)
+      .json({ message: "Error deleting movie", error: err.message });
   }
 };
 
@@ -381,12 +425,16 @@ export const getMovieById = async (
     const formattedMovie = {
       id: movie.id,
       title: movie.title,
-      image: `${process.env.APP_URL}/images/${movie.image}`,
+      image: movie.image.startsWith("http")
+        ? movie.image
+        : `${process.env.APP_URL}/images/${movie.image}`,
       releaseDate: movie.releaseDate,
-      type: movie.type,
-      certificate: movie.certificate,
+      description: movie.description,
       createdBy: `${movie.user.firstName} ${movie.user.lastName}`,
-      genres: movie.genres.map((g) => g.genre.name),
+      genres: movie.genres.map((g) => ({
+        id: g.genre.id,
+        name: g.genre.name,
+      })),
       averageRating:
         movie.ratings.length > 0
           ? movie.ratings.reduce((acc, rating) => acc + rating.score, 0) /
@@ -403,7 +451,6 @@ export const getMovieById = async (
   }
 };
 
-// Fetch Related Movies Controller (by Genre)
 export const getRelatedMovies = async (
   req: Request,
   res: Response
@@ -454,19 +501,102 @@ export const getRelatedMovies = async (
       take: 5, // Limit to 5 related movies
     });
 
-    const formattedMovies = relatedMovies.map((movie) => ({
+    // Format the response
+    const movies = relatedMovies.map((movie) => ({
       id: movie.id,
       title: movie.title,
-      image: `${process.env.APP_URL}/images/${movie.image}`,
+      image: movie.image.startsWith("http")
+        ? movie.image
+        : `${process.env.APP_URL}/images/${movie.image}`,
       releaseDate: movie.releaseDate,
       genres: movie.genres.map((g) => g.genre.name),
     }));
 
-    return res.json({
-      message: "Related movies fetched successfully",
-      relatedMovies: formattedMovies,
+    return res.status(200).json({
+      movies,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: "Error fetching related movies" });
+  }
+};
+
+export const getAllGenres = async (req: Request, res: Response) => {
+  try {
+    const genres = await prisma.genre.findMany(); // Fetch all genres from the Genre table
+    return res.status(200).json(genres);
+  } catch (error) {
+    console.error("Error fetching genres:", error);
+    return res.status(500).json({ message: "Error fetching genres" });
+  }
+};
+
+// Search Movies Controller
+export const searchMovies = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { query } = req.query;
+
+  if (!query || typeof query !== "string") {
+    return res.status(400).json({ message: "Search query is required" });
+  }
+
+  try {
+    // Fetch movies that contain the query string (case-insensitive)
+    const movies = await prisma.movie.findMany({
+      where: {
+        title: {
+          contains: query,
+          mode: "insensitive", // Case-insensitive search
+        },
+      },
+      include: {
+        genres: {
+          select: {
+            genre: true, // Include genre details
+          },
+        },
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true, // Include movie creator details
+          },
+        },
+        ratings: {
+          select: {
+            score: true, // Include ratings
+          },
+        },
+      },
+    });
+
+    if (movies.length === 0) {
+      return res.status(404).json({ message: "No movies found" });
+    }
+
+    // Format the response
+    const formattedMovies = movies.map((movie) => ({
+      id: movie.id,
+      title: movie.title,
+      image: movie.image.startsWith("http")
+        ? movie.image
+        : `${process.env.APP_URL}/images/${movie.image}`,
+      releaseDate: movie.releaseDate,
+      averageRating:
+        movie.ratings.length > 0
+          ? movie.ratings.reduce((acc, rating) => acc + rating.score, 0) /
+            movie.ratings.length
+          : null,
+      genres: movie.genres.map((g) => g.genre.name),
+    }));
+
+    return res.status(200).json({
+      message: "Movies found successfully",
+      movies: formattedMovies,
     });
   } catch (err) {
-    return res.status(500).json({ message: "Error fetching related movies" });
+    console.error("Error during movie search:", err);
+    return res.status(500).json({ message: "Error searching movies" });
   }
 };

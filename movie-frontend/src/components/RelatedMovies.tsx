@@ -27,7 +27,7 @@ const RelatedMovies: React.FC<RelatedMoviesProps> = ({ movieId }) => {
         );
         const data = await response.json();
         if (response.ok) {
-          setRelatedMovies(data.relatedMovies);
+          setRelatedMovies(data.movies);
         } else {
           console.error("Failed to fetch related movies");
         }

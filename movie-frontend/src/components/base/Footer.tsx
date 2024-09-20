@@ -52,8 +52,8 @@ function Footer() {
               Get the freshest reviews, news, and more delivered right to your
               inbox!
             </p>
-            <button className="mt-4 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition">
-              Join the Newsletter
+            <button className="mt-4 bg-yellow-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition">
+              Join us
             </button>
           </div>
         </div>

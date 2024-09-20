@@ -46,6 +46,10 @@ exports.createMovieSchema = zod_1.z.object({
         .string()
         .min(1, "Title must have at least 1 character")
         .max(100, "Title must not exceed 100 characters"),
+    description: zod_1.z
+        .string()
+        .min(1, "Description must have at least 1 character")
+        .max(1000, "Description must not exceed 1000 characters"),
     releaseDate: zod_1.z.preprocess((val) => (typeof val === "string" ? parseInt(val, 10) : val), zod_1.z
         .number({
         required_error: "Release date is required",
@@ -53,14 +57,6 @@ exports.createMovieSchema = zod_1.z.object({
     })
         .min(1880, "Release date must be a valid year")
         .max(new Date().getFullYear(), "Release date cannot be in the future")),
-    type: zod_1.z
-        .string()
-        .min(1, "Type must have at least 1 character")
-        .max(50, "Type must not exceed 50 characters"),
-    certificate: zod_1.z
-        .string()
-        .max(20, "Certificate must not exceed 20 characters")
-        .optional(),
     genres: zod_1.z.preprocess((val) => {
         if (typeof val === "string") {
             try {
@@ -87,15 +83,6 @@ exports.updateMovieSchema = zod_1.z.object({
         .min(1880, "Release date must be a valid year")
         .max(new Date().getFullYear(), "Release date cannot be in the future")
         .optional()),
-    type: zod_1.z
-        .string()
-        .min(1, "Type must have at least 1 character")
-        .max(50, "Type must not exceed 50 characters")
-        .optional(),
-    certificate: zod_1.z
-        .string()
-        .max(20, "Certificate must not exceed 20 characters")
-        .optional(),
     genres: zod_1.z.preprocess((val) => {
         if (typeof val === "string") {
             try {

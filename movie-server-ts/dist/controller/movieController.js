@@ -12,7 +12,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getRelatedMovies = exports.getMovieById = exports.addRating = exports.deleteMovie = exports.updateMovie = exports.getAllMovies = exports.createMovie = void 0;
+exports.searchMovies = exports.getAllGenres = exports.getRelatedMovies = exports.getMovieById = exports.addRating = exports.deleteMovie = exports.updateMovie = exports.getAllMovies = exports.createMovie = void 0;
 const db_config_1 = __importDefault(require("../DB/db.config"));
 const helper_1 = require("../utils/helper");
 const userdataValidation_1 = require("../validation/userdataValidation");
@@ -69,8 +69,7 @@ const createMovie = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
                 title: movieData.title,
                 image: imageName,
                 releaseDate: movieData.releaseDate,
-                type: movieData.type,
-                certificate: movieData.certificate,
+                description: movieData.description,
                 createdBy: userID,
                 genres: {
                     create: movieData.genres.map((genreId) => ({
@@ -97,39 +96,68 @@ const createMovie = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
 exports.createMovie = createMovie;
 // Fetch All Movies Controller
 const getAllMovies = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const { page = 1, limit = 18, genre, user } = req.query;
+    const pageNumber = parseInt(page);
+    const limitNumber = parseInt(limit);
+    const skip = (pageNumber - 1) * limitNumber;
     try {
-        // Fetch all movies from the database along with related data (genres, creator, ratings)
+        // Create a filter object for genre if provided
+        const genreFilter = genre
+            ? {
+                genres: {
+                    some: {
+                        genreId: parseInt(genre),
+                    },
+                },
+            }
+            : {}; // No genre filter if not provided
+        // Create a filter for userId if provided
+        const userIdFilter = user
+            ? {
+                createdBy: parseInt(user), // Filter by userId
+            }
+            : {}; // No user filter if not provided
+        // Combine the filters
+        const combinedFilters = Object.assign(Object.assign({}, genreFilter), userIdFilter);
+        // Fetch movies with pagination, optional genre filter, and optional user filter
         const movies = yield db_config_1.default.movie.findMany({
+            skip: skip,
+            take: limitNumber,
+            where: combinedFilters,
+            orderBy: {
+                id: "desc",
+            },
             include: {
                 genres: {
                     select: {
-                        genre: true, // Include genre details
+                        genre: true,
                     },
                 },
                 user: {
                     select: {
                         id: true,
                         firstName: true,
-                        lastName: true, // Include movie creator details
+                        lastName: true,
                     },
                 },
                 ratings: {
                     select: {
-                        score: true, // Include ratings
+                        score: true,
                     },
                 },
             },
+        });
+        const totalMovies = yield db_config_1.default.movie.count({
+            where: combinedFilters,
         });
         // Format the response
         const formattedMovies = movies.map((movie) => ({
             id: movie.id,
             title: movie.title,
-            image: `${process.env.APP_URL}/images/${movie.image}`,
+            image: movie.image.startsWith("http")
+                ? movie.image
+                : `${process.env.APP_URL}/images/${movie.image}`,
             releaseDate: movie.releaseDate,
-            // type: movie.type,
-            // certificate: movie.certificate,
-            // createdBy: `${movie.user.firstName} ${movie.user.lastName}`,
-            // genres: movie.genres.map((g) => g.genre.name),
             averageRating: movie.ratings.length > 0
                 ? movie.ratings.reduce((acc, rating) => acc + rating.score, 0) /
                     movie.ratings.length
@@ -138,6 +166,7 @@ const getAllMovies = (req, res) => __awaiter(void 0, void 0, void 0, function* (
         return res.json({
             message: "Movies fetched successfully",
             movies: formattedMovies,
+            totalMovies,
         });
     }
     catch (err) {
@@ -196,8 +225,6 @@ const updateMovie = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
                 title: movieData.title || movie.title,
                 image: imageName,
                 releaseDate: movieData.releaseDate || movie.releaseDate,
-                type: movieData.type || movie.type,
-                certificate: movieData.certificate || movie.certificate,
                 genres: movieData.genres
                     ? {
                         deleteMany: {},
@@ -224,13 +251,17 @@ const updateMovie = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
     }
 });
 exports.updateMovie = updateMovie;
-// Delete Movie Controller
 const deleteMovie = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const { id } = req.params;
     try {
+        // Check if the id is a valid number
+        const movieId = parseInt(id);
+        if (isNaN(movieId)) {
+            return res.status(400).json({ message: "Invalid movie ID" });
+        }
         // Check if the movie exists
         const movie = yield db_config_1.default.movie.findUnique({
-            where: { id: parseInt(id) },
+            where: { id: movieId },
         });
         if (!movie) {
             return res.status(404).json({ message: "Movie not found" });
@@ -241,12 +272,15 @@ const deleteMovie = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
         }
         // Delete the movie from the database
         yield db_config_1.default.movie.delete({
-            where: { id: parseInt(id) },
+            where: { id: movieId },
         });
         return res.json({ message: "Movie deleted successfully" });
     }
     catch (err) {
-        return res.status(500).json({ message: "Error deleting movie" });
+        console.error("Error deleting movie:", err); // Log the error for debugging
+        return res
+            .status(500)
+            .json({ message: "Error deleting movie", error: err.message });
     }
 });
 exports.deleteMovie = deleteMovie;
@@ -329,12 +363,16 @@ const getMovieById = (req, res) => __awaiter(void 0, void 0, void 0, function* (
         const formattedMovie = {
             id: movie.id,
             title: movie.title,
-            image: `${process.env.APP_URL}/images/${movie.image}`,
+            image: movie.image.startsWith("http")
+                ? movie.image
+                : `${process.env.APP_URL}/images/${movie.image}`,
             releaseDate: movie.releaseDate,
-            type: movie.type,
-            certificate: movie.certificate,
+            description: movie.description,
             createdBy: `${movie.user.firstName} ${movie.user.lastName}`,
-            genres: movie.genres.map((g) => g.genre.name),
+            genres: movie.genres.map((g) => ({
+                id: g.genre.id,
+                name: g.genre.name,
+            })),
             averageRating: movie.ratings.length > 0
                 ? movie.ratings.reduce((acc, rating) => acc + rating.score, 0) /
                     movie.ratings.length
@@ -350,7 +388,6 @@ const getMovieById = (req, res) => __awaiter(void 0, void 0, void 0, function* (
     }
 });
 exports.getMovieById = getMovieById;
-// Fetch Related Movies Controller (by Genre)
 const getRelatedMovies = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const { id } = req.params;
     try {
@@ -393,20 +430,96 @@ const getRelatedMovies = (req, res) => __awaiter(void 0, void 0, void 0, functio
             },
             take: 5, // Limit to 5 related movies
         });
-        const formattedMovies = relatedMovies.map((movie) => ({
+        // Format the response
+        const movies = relatedMovies.map((movie) => ({
             id: movie.id,
             title: movie.title,
-            image: `${process.env.APP_URL}/images/${movie.image}`,
+            image: movie.image.startsWith("http")
+                ? movie.image
+                : `${process.env.APP_URL}/images/${movie.image}`,
             releaseDate: movie.releaseDate,
             genres: movie.genres.map((g) => g.genre.name),
         }));
-        return res.json({
-            message: "Related movies fetched successfully",
-            relatedMovies: formattedMovies,
+        return res.status(200).json({
+            movies,
         });
     }
-    catch (err) {
+    catch (error) {
         return res.status(500).json({ message: "Error fetching related movies" });
     }
 });
 exports.getRelatedMovies = getRelatedMovies;
+const getAllGenres = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const genres = yield db_config_1.default.genre.findMany(); // Fetch all genres from the Genre table
+        return res.status(200).json(genres);
+    }
+    catch (error) {
+        console.error("Error fetching genres:", error);
+        return res.status(500).json({ message: "Error fetching genres" });
+    }
+});
+exports.getAllGenres = getAllGenres;
+// Search Movies Controller
+const searchMovies = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const { query } = req.query;
+    if (!query || typeof query !== "string") {
+        return res.status(400).json({ message: "Search query is required" });
+    }
+    try {
+        // Fetch movies that contain the query string (case-insensitive)
+        const movies = yield db_config_1.default.movie.findMany({
+            where: {
+                title: {
+                    contains: query,
+                    mode: "insensitive", // Case-insensitive search
+                },
+            },
+            include: {
+                genres: {
+                    select: {
+                        genre: true, // Include genre details
+                    },
+                },
+                user: {
+                    select: {
+                        id: true,
+                        firstName: true,
+                        lastName: true, // Include movie creator details
+                    },
+                },
+                ratings: {
+                    select: {
+                        score: true, // Include ratings
+                    },
+                },
+            },
+        });
+        if (movies.length === 0) {
+            return res.status(404).json({ message: "No movies found" });
+        }
+        // Format the response
+        const formattedMovies = movies.map((movie) => ({
+            id: movie.id,
+            title: movie.title,
+            image: movie.image.startsWith("http")
+                ? movie.image
+                : `${process.env.APP_URL}/images/${movie.image}`,
+            releaseDate: movie.releaseDate,
+            averageRating: movie.ratings.length > 0
+                ? movie.ratings.reduce((acc, rating) => acc + rating.score, 0) /
+                    movie.ratings.length
+                : null,
+            genres: movie.genres.map((g) => g.genre.name),
+        }));
+        return res.status(200).json({
+            message: "Movies found successfully",
+            movies: formattedMovies,
+        });
+    }
+    catch (err) {
+        console.error("Error during movie search:", err);
+        return res.status(500).json({ message: "Error searching movies" });
+    }
+});
+exports.searchMovies = searchMovies;

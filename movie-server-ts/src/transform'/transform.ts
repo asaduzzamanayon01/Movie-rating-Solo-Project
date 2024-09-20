@@ -25,16 +25,7 @@ interface TransformedMovie {
   title: string;
   image: string;
   releaseDate: number;
-  votes?: number; // Made optional to align with Movie's type
   duration?: number; // Made optional to align with Movie's type
-  type: string;
-  certificate?: string;
-  episodes?: number;
-  nudity?: string;
-  violence?: string;
-  profanity?: string;
-  alcohol?: string;
-  frightening?: string;
   genres: string[];
 }
 
@@ -44,16 +35,7 @@ export const movieTransform = (movie: Movie): TransformedMovie => {
     title: movie.title,
     image: getImageUrl(movie.image),
     releaseDate: movie.releaseDate,
-    votes: movie.votes ?? undefined, // Convert null to undefined
     duration: movie.duration ?? undefined, // Convert null to undefined
-    type: movie.type,
-    certificate: movie.certificate ?? undefined,
-    episodes: movie.episodes ?? undefined, // Convert null to undefined
-    nudity: movie.nudity ?? undefined,
-    violence: movie.violence ?? undefined,
-    profanity: movie.profanity ?? undefined,
-    alcohol: movie.alcohol ?? undefined,
-    frightening: movie.frightening ?? undefined,
     genres: movie.genres?.map((genre) => genre.name) || [], // Map genre objects to their names
   };
 };
