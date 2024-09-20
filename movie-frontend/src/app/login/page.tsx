@@ -5,7 +5,7 @@ import { Toaster } from "sonner";
 const RegisterPage = () => {
   return (
     <AuthProvider>
-      <div className="max-w-md mx-auto mt-10">
+      <div className="max-w-md mx-auto my-10">
         <LoginForm />
         <Toaster position="top-right" />
       </div>

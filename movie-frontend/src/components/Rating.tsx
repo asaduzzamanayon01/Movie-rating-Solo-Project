@@ -5,15 +5,20 @@ import { Rating as ReactRating } from "@smastrom/react-rating";
 export function Rating({
   value,
   onChange,
+  width,
+  readOnly = false,
 }: {
   value: number;
-  onChange: (newRating: number) => void;
+  width: number;
+  onChange?: (newRating: number) => void;
+  readOnly?: boolean;
 }) {
   return (
     <ReactRating
-      style={{ maxWidth: 500 }}
+      style={{ maxWidth: width ?? 500 }}
       value={value}
-      onChange={onChange} // Using onChange instead of onValueChange
+      onChange={readOnly ? undefined : onChange}
+      readOnly={readOnly}
     />
   );
 }
