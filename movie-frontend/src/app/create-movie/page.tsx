@@ -2,7 +2,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 import React, { useState, useEffect, useContext } from "react";
-import { AuthContext } from "../context/AuthContext";
+import { AuthContext } from "../../context/AuthContext";
 import { toast } from "sonner";
 import Cookies from "js-cookie";
 import { useRouter } from "next/navigation";
@@ -217,12 +217,11 @@ const CreateMovieForm = () => {
         <div>
           <Select
             primaryColor="indigo"
-            value={selectedGenres} // Use selectedGenres directly
+            value={selectedGenres}
             onChange={handleGenreChange}
             options={genreOptions}
             isMultiple={true}
             isClearable={true}
-            placeholder="Select Genre" // Placeholder text
             classNames={{
               tagItem: ({ item }) =>
                 `inline-flex items-center bg-indigo-100 text-indigo-700 rounded px-2 py-1 mr-2 mt-1`,

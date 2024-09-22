@@ -1,6 +1,6 @@
 // pages/register.tsx
 import RegisterForm from "../../components/forms/RegisterForm";
-import { AuthProvider } from "../context/AuthContext";
+import { AuthProvider } from "../../context/AuthContext";
 import { Toaster } from "sonner";
 
 const RegisterPage = () => {

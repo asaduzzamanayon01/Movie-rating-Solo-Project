@@ -1,5 +1,5 @@
 import LoginForm from "../../components/forms/LoginForm";
-import { AuthProvider } from "../context/AuthContext";
+import { AuthProvider } from "../../context/AuthContext";
 import { Toaster } from "sonner";
 
 const RegisterPage = () => {

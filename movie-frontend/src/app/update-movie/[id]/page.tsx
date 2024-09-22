@@ -3,7 +3,7 @@
 "use client";
 import React, { useState, useEffect, useContext } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { AuthContext } from "../../context/AuthContext";
+import { AuthContext } from "../../../context/AuthContext";
 import { toast } from "sonner";
 import Cookies from "js-cookie";
 import Select from "react-tailwindcss-select";

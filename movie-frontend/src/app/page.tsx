@@ -1,5 +1,6 @@
+// import { Navbar } from "@/components/base/Navbar";
 import React from "react";
 
 export default function App() {
-  return <div></div>;
+  return <div>{/* <Navbar /> */}</div>;
 }
