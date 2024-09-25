@@ -23,7 +23,7 @@ const RelatedMovies: React.FC<RelatedMoviesProps> = ({ movieId }) => {
     const fetchRelatedMovies = async () => {
       try {
         const response = await fetch(
-          `http://localhost:8000/api/related-movies/${movieId}`
+          `http://localhost:8000/api/movies/related/${movieId}`
         );
         const data = await response.json();
         if (response.ok) {
@@ -55,7 +55,7 @@ const RelatedMovies: React.FC<RelatedMoviesProps> = ({ movieId }) => {
       <div className="space-y-3">
         {relatedMovies.map((movie) => (
           <div
-            onClick={() => router.push(`/movie-detail/${movie.id}`)}
+            onClick={() => router.push(`/movie/${movie.id}`)}
             key={movie.id}
             className="flex bg-slate-950 text-white rounded-lg shadow-lg p-2 hover:bg-gray-800 transition"
           >

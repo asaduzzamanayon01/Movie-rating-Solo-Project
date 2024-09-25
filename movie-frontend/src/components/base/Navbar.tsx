@@ -7,19 +7,17 @@ import { useRouter } from "next/navigation";
 import debounce from "lodash.debounce";
 import { AuthContext } from "../../context/AuthContext";
 import HamburgurMenu from "./HamburgurMenu";
+import { usePathname } from "next/navigation";
 
 export const Navbar = () => {
-  const { isAuthenticated, isLogedIn } = useContext(AuthContext)!;
+  const pathname = usePathname();
+  const { isAuthenticated } = useContext(AuthContext)!;
   const router = useRouter();
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
 
-  useEffect(() => {
-    console.log("Navbar Auth state updated:", { isAuthenticated });
-  }, [isAuthenticated]);
-
-  console.log("from navbar outside", { isAuthenticated, isLogedIn });
+  useEffect(() => {}, [isAuthenticated]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -38,14 +36,14 @@ export const Navbar = () => {
   }, []);
 
   const handleSearch = debounce(async (query: string) => {
-    if (query.length < 3) {
+    if (query.length < 2) {
       setSearchResults([]);
       return;
     }
 
     try {
       const res = await fetch(
-        `http://localhost:8000/api/search?query=${query}`
+        `http://localhost:8000/api/movies?query=${query}&limit=10` // Updated API endpoint
       );
       if (!res.ok) {
         throw new Error("Error searching movies");
@@ -61,11 +59,14 @@ export const Navbar = () => {
     const query = e.target.value;
     setSearchQuery(query);
     handleSearch(query);
+    if (pathname === "/movies") {
+      router.push(`?query=${query}`);
+    }
   };
 
   const handleMovieClick = (id: string) => {
     setSearchResults([]); // Close the search dropdown
-    router.push(`/movie-detail/${id}`);
+    router.push(`/movie/${id}`);
   };
 
   return (
@@ -88,7 +89,7 @@ export const Navbar = () => {
             onChange={handleInputChange}
             className="px-4 py-2 bg-white text-black focus:outline-none w-full rounded-lg"
           />
-          {searchResults.length > 0 && (
+          {searchResults.length > 0 && pathname != "/movies" && (
             <div
               ref={dropdownRef}
               className="absolute top-full left-0 w-full bg-white text-black shadow-lg z-10 rounded-lg mt-1"

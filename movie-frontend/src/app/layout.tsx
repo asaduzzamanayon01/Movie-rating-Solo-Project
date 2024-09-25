@@ -38,12 +38,9 @@ export default function RootLayout({
         {/* AuthProvider wrapping the entire layout */}
         <AuthProvider>
           <Navbar />
-          {/* Conditionally rendering the Categories component */}
           {pathname === "/movies" && <Categories />}
-          {/* Global toaster for notifications */}
           <Toaster position="top-right" richColors />
-          {/* Rendering the page content */}
-          {children}
+          <div className="min-h-[500px]">{children}</div>
           <Footer />
         </AuthProvider>
       </body>

@@ -1,9 +1,9 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Cookies from "js-cookie";
-import RelatedMovies from "../../../components/RelatedMovies"; // Adjust the import path as needed
+import RelatedMovies from "../../../components/RelatedMovies";
 import { Rating } from "@/components/Rating";
 import { toast } from "sonner";
 
@@ -17,10 +17,12 @@ interface Movie {
   createdBy: string;
   genres: string[];
   averageRating: number | null;
+  userRating: number | 0;
   description: string | null;
 }
 
 const MovieDetailPage = () => {
+  const router = useRouter();
   const { id } = useParams();
   const [movie, setMovie] = useState<Movie | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -28,9 +30,7 @@ const MovieDetailPage = () => {
 
   const fetchMovie = async () => {
     try {
-      const response = await fetch(
-        `http://localhost:8000/api/movie-detail/${id}`
-      );
+      const response = await fetch(`http://localhost:8000/api/movie/${id}`);
       const data = await response.json();
       if (response.ok) {
         setMovie(data.movie);
@@ -53,7 +53,8 @@ const MovieDetailPage = () => {
     const token = Cookies.get("token");
 
     if (!token) {
-      toast.error("User is not authenticated");
+      toast.warning("User is not authenticated");
+      router.push("/login");
       return;
     }
 
@@ -75,7 +76,6 @@ const MovieDetailPage = () => {
         toast.success("Rated successfully");
       } else {
         const data = await response.json();
-        console.error(data.error);
         toast.error(data.error);
       }
     } catch (error) {
@@ -136,7 +136,7 @@ const MovieDetailPage = () => {
                 <div className="bg-gray-900 border border-gray-700 rounded-lg p-4 hover:bg-gray-700 transition-all duration-300">
                   <p className="text-lg text-white">
                     <span className="font-semibold">Genre:</span>{" "}
-                    {movie.genres.map((genre) => genre.name).join(", ")}
+                    {movie.genres.map((genre) => genre).join(", ")}
                   </p>
                 </div>
                 <div className="bg-gray-900 border border-gray-700 rounded-lg p-4 hover:bg-gray-700 transition-all duration-300">
@@ -166,7 +166,7 @@ const MovieDetailPage = () => {
               {/* Star Rating Component */}
               <div className="text-center mt-4">
                 <Rating
-                  value={rating}
+                  value={movie.userRating}
                   onChange={handleRatingChange}
                   readOnly={false}
                   width={500}
