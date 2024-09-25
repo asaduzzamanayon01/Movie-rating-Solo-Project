@@ -34,7 +34,7 @@ export const movieTransform = (movie: Movie): TransformedMovie => {
     id: movie.id,
     title: movie.title,
     image: getImageUrl(movie.image),
-    releaseDate: movie.releaseDate,
+    releaseDate: movie.releaseDate ?? 2022,
     duration: movie.duration ?? undefined, // Convert null to undefined
     genres: movie.genres?.map((genre) => genre.name) || [], // Map genre objects to their names
   };

@@ -8,12 +8,16 @@
     "watch": "tsc -w",
     "build": "tsc",
     "server": "nodemon ./dist/index.js",
-    "migrate-csv": "ts-node migrate.ts"
+    "migrate-csv": "ts-node migrate.ts",
+    "faker": "ts-node faker.ts",
+    "elastic": "ts-node ./src/elasticSearch.ts"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@elastic/elasticsearch": "^8.15.0",
+    "@faker-js/faker": "^9.0.1",
     "@prisma/client": "^5.19.1",
     "bcrypt": "^5.1.1",
     "cors": "^2.8.5",

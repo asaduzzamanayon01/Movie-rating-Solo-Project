@@ -1,16 +1,15 @@
-// RootLayout.tsx
 "use client";
-// import { Metadata } from "next";
 import { Toaster } from "sonner";
 import localFont from "next/font/local";
 import "./globals.css";
-import { AuthProvider } from "./context/AuthContext";
+import { AuthProvider } from "../context/AuthContext";
 import { Navbar } from "@/components/base/Navbar";
 import Footer from "@/components/base/Footer";
 import "@smastrom/react-rating/style.css";
 import Categories from "@/components/base/Categories";
-import { usePathname } from "next/navigation"; // Import the hook
+import { usePathname } from "next/navigation";
 
+// Importing custom fonts
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
   variable: "--font-geist-sans",
@@ -23,29 +22,25 @@ const geistMono = localFont({
   weight: "100 900",
 });
 
-// export const metadata: Metadata = {
-//   title: "Movie Rating App",
-//   description: "Rate a Movie",
-// };
-
+// Main RootLayout component with AuthProvider wrapping the content
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const pathname = usePathname(); // Get the current pathname
+  const pathname = usePathname();
 
   return (
     <html lang="en">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-black`}
       >
+        {/* AuthProvider wrapping the entire layout */}
         <AuthProvider>
           <Navbar />
-          {/* Conditionally render Categories only on the '/movies' route */}
           {pathname === "/movies" && <Categories />}
-          <Toaster position="top-right" />
-          {children}
+          <Toaster position="top-right" richColors />
+          <div className="min-h-[500px]">{children}</div>
           <Footer />
         </AuthProvider>
       </body>

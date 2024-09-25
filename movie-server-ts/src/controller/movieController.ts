@@ -1,11 +1,5 @@
 import { Request, Response } from "express";
-import prisma from "../DB/db.config";
-import {
-  formatError,
-  generateRandom,
-  imageValidator,
-  removeImage,
-} from "../utils/helper";
+import { Client as ElasticsearchClient } from "@elastic/elasticsearch";
 import { UploadedFile } from "express-fileupload";
 import {
   createMovieSchema,
@@ -14,14 +8,86 @@ import {
 import { z, ZodError } from "zod";
 import fs from "fs";
 import path from "path";
-import { promises } from "dns";
+import {
+  formatError,
+  generateRandom,
+  imageValidator,
+  removeImage,
+} from "../utils/helper";
+import prisma from "../DB/db.config";
+import { ParsedQs } from "qs";
 
-// Authenticated request type to ensure TypeScript knows about req.user
-interface AuthenticatedRequest extends Request {
-  user?: { id: number; email: string };
-}
+// Type declarations
+type User = {
+  id: number;
+  email: string;
+};
 
-const ensureDirectoryExistence = (filePath: string) => {
+type AuthenticatedRequest = Request & {
+  user?: User;
+};
+
+type MovieData = {
+  title: string;
+  image?: string;
+  releaseDate: number;
+  description: string;
+  createdBy?: number;
+  genres: number[];
+  duration?: number;
+  genreIds?: number[];
+};
+
+type ElasticsearchMovie = {
+  title: string;
+  image: string | null;
+  releaseDate: number;
+  description: string;
+  createdBy: number;
+  genres: string[];
+  averageRating: number | null;
+  duration: number | null;
+  createdAt: string;
+};
+
+type FormattedMovie = {
+  id: string;
+  title: string;
+  image: string;
+  releaseDate: number;
+  description: string;
+  createdBy: number;
+  genres: number[];
+  genreIds?: number[] | string[];
+  averageRating: number | null;
+  duration: number | null;
+};
+
+type SearchQuery = {
+  bool: {
+    must: Array<{
+      term?: { [key: string]: string | number };
+      multi_match?: {
+        query: string;
+        fields: string[];
+      };
+    }>;
+  };
+};
+
+// Elasticsearch client setup
+const esClient: ElasticsearchClient = new ElasticsearchClient({
+  node: "https://localhost:9200/",
+  auth: {
+    username: "elastic",
+    password: "I16omnzaK0sHB8mj4YEL",
+  },
+  tls: {
+    rejectUnauthorized: false,
+  },
+});
+
+const ensureDirectoryExistence = (filePath: string): void => {
   const dir = path.dirname(filePath);
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
@@ -34,18 +100,15 @@ export const createMovie = async (
   res: Response
 ): Promise<Response> => {
   try {
-    // Validate the request body using the createMovieSchema
-    const movieData = createMovieSchema.parse(req.body);
+    const movieData: MovieData = createMovieSchema.parse(req.body);
 
-    // Check if the image file is provided
     if (!req.files || !req.files.image) {
       return res.status(400).json({ message: "Image is required" });
     }
 
     const movieImage = req.files.image as UploadedFile;
 
-    // Validate image size and type
-    const validationMessages = imageValidator(
+    const validationMessages: string | null = imageValidator(
       movieImage.size,
       movieImage.mimetype
     );
@@ -53,15 +116,18 @@ export const createMovie = async (
       return res.status(400).json({ message: validationMessages });
     }
 
-    // Generate a unique name for the image
-    const imgExt = movieImage.name.split(".").pop();
-    const imageName = `${generateRandom()}.${imgExt}`;
-    const uploadPath = path.join(process.cwd(), "public", "images", imageName);
+    const imgExt: string | undefined = movieImage.name.split(".").pop();
+    const imageName: string = `${generateRandom()}.${imgExt}`;
+    const uploadPath: string = path.join(
+      process.cwd(),
+      "public",
+      "images",
+      imageName
+    );
 
-    // Ensure the directory exists and move the new image
     ensureDirectoryExistence(uploadPath);
     await new Promise<void>((resolve, reject) => {
-      movieImage.mv(uploadPath, (err) => {
+      movieImage.mv(uploadPath, (err: Error | null) => {
         if (err) {
           console.error("Error during file upload:", err);
           reject(err);
@@ -71,164 +137,275 @@ export const createMovie = async (
       });
     });
 
-    // Get the user ID from the token (from req.user set by the authMiddleware)
-    const userID = req.user?.id;
+    const userID: number | undefined = req.user?.id;
     if (!userID) {
       return res.status(401).json({ message: "Unauthorized" });
     }
-
+    console.log("Movie ganra from create form", movieData.genres);
     // Create the movie entry in the database
-    const movie = await prisma.movie.create({
+    const dbMovie = await prisma.movie.create({
       data: {
         title: movieData.title,
         image: imageName,
         releaseDate: movieData.releaseDate,
         description: movieData.description,
         createdBy: userID,
+        duration: movieData.duration,
+        createdAt: new Date(),
         genres: {
           create: movieData.genres.map((genreId: number) => ({
-            genre: { connect: { id: genreId } }, // Connect the genres
+            genre: { connect: { id: genreId } },
           })),
         },
       },
+      include: {
+        genres: {
+          include: {
+            genre: true,
+          },
+        },
+      },
+    });
+
+    // Prepare the movie data for Elasticsearch
+    const esMovie = {
+      id: dbMovie.id,
+      title: dbMovie.title,
+      image: dbMovie.image,
+      releaseDate: dbMovie.releaseDate,
+      description: dbMovie.description,
+      createdBy: dbMovie.createdBy,
+      duration: dbMovie.duration,
+      createdAt: new Date().toISOString(),
+      genres: dbMovie.genres.map((g) => g.genre.name),
+    };
+
+    // Index the movie in Elasticsearch
+    await esClient.index({
+      index: "movies",
+      id: dbMovie.id.toString(),
+      body: esMovie,
     });
 
     return res.status(201).json({
       message: "Movie created successfully",
-      movie,
+      movie: esMovie,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (error instanceof ZodError) {
       const errors = formatError(error);
       return res.status(422).json({ message: "Invalid data", errors });
     } else {
-      return res.status(500).json({ message: "Something wrong" });
+      console.error("Error in createMovie:", error);
+      return res.status(500).json({ message: "Something went wrong" });
     }
   }
 };
 
-// Fetch All Movies Controller
 export const getAllMovies = async (
   req: Request,
   res: Response
 ): Promise<Response> => {
-  const { page = 1, limit = 18, genre, user } = req.query;
+  const { page = "1", limit = "18", genre, user, query } = req.query;
 
-  const pageNumber = parseInt(page as string);
-  const limitNumber = parseInt(limit as string);
-  const skip = (pageNumber - 1) * limitNumber;
+  const pageNumber: number = parseInt(page as string);
+  const limitNumber: number = parseInt(limit as string);
+  const from: number = (pageNumber - 1) * limitNumber;
 
   try {
-    // Create a filter object for genre if provided
-    const genreFilter = genre
-      ? {
-          genres: {
-            some: {
-              genreId: parseInt(genre as string),
-            },
-          },
-        }
-      : {}; // No genre filter if not provided
-
-    // Create a filter for userId if provided
-    const userIdFilter = user
-      ? {
-          createdBy: parseInt(user as string), // Filter by userId
-        }
-      : {}; // No user filter if not provided
-
-    // Combine the filters
-    const combinedFilters = {
-      ...genreFilter,
-      ...userIdFilter, // Both filters will be applied if provided
+    // Building the search query for ElasticSearch
+    const searchQuery: any = {
+      bool: {
+        must: [],
+      },
     };
 
-    // Fetch movies with pagination, optional genre filter, and optional user filter
-    const movies = await prisma.movie.findMany({
-      skip: skip,
-      take: limitNumber,
-      where: combinedFilters,
-      orderBy: {
-        id: "desc",
+    if (genre) {
+      searchQuery.bool.must.push({
+        term: { "genres.keyword": genre.toString() }, // This uses the correct keyword subfield
+      });
+    }
+
+    // Filter by user if provided
+    if (user) {
+      searchQuery.bool.must.push({
+        term: { createdBy: parseInt(user as string) },
+      });
+    }
+
+    // Search by query in title or description
+    if (query) {
+      searchQuery.bool.must.push({
+        multi_match: {
+          query: query as string,
+          fields: ["title", "description"],
+          fuzziness: "AUTO",
+        },
+      });
+    }
+
+    // Execute the search query
+    const result = await esClient.search({
+      index: "movies",
+      from,
+      size: limitNumber,
+      body: {
+        query: searchQuery,
+        sort: [{ createdAt: "desc" }],
       },
-      include: {
-        genres: {
-          select: {
-            genre: true,
-          },
-        },
-        user: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-          },
-        },
-        ratings: {
-          select: {
-            score: true,
-          },
-        },
+      track_total_hits: true,
+    });
+    const hits = result.hits.hits;
+
+    const movieIds = hits.map((hit) => parseInt(hit._id ?? ""));
+
+    const averageRatings = await prisma.rate.groupBy({
+      by: ["movieId"],
+      where: { movieId: { in: movieIds } },
+      _avg: {
+        score: true,
       },
     });
 
-    const totalMovies = await prisma.movie.count({
-      where: combinedFilters,
-    });
+    const ratingMap = new Map(
+      averageRatings.map((rating) => [rating.movieId, rating._avg.score])
+    );
 
-    // Format the response
-    const formattedMovies = movies.map((movie) => ({
-      id: movie.id,
-      title: movie.title,
-      image: movie.image.startsWith("http")
-        ? movie.image
-        : `${process.env.APP_URL}/images/${movie.image}`,
-      releaseDate: movie.releaseDate,
-      averageRating:
-        movie.ratings.length > 0
-          ? movie.ratings.reduce((acc, rating) => acc + rating.score, 0) /
-            movie.ratings.length
-          : null,
-    }));
+    // Format the movies to return
+    const movies: FormattedMovie[] = result.hits.hits.map(
+      (hit): FormattedMovie => {
+        const source = hit._source as ElasticsearchMovie;
+        return {
+          id: hit._id ?? "",
+          title: source.title,
+          image:
+            source.image && source.image.startsWith("http")
+              ? source.image
+              : source.image
+              ? `${process.env.APP_URL}/images/${source.image}`
+              : "default-image-url.jpg",
+          releaseDate: source.releaseDate,
+          description: source.description,
+          createdBy: source.createdBy,
+          genres: source.genres,
+          averageRating: ratingMap.get(parseInt(hit._id ?? "")) ?? null,
+          duration: source.duration,
+        };
+      }
+    );
+
+    // Check totalMovies (Elasticsearch might return it as an object)
+    const totalMovies =
+      typeof result.hits.total === "number"
+        ? result.hits.total
+        : result.hits.total?.value || 0;
 
     return res.json({
       message: "Movies fetched successfully",
-      movies: formattedMovies,
+      movies,
       totalMovies,
     });
   } catch (err) {
-    return res.status(500).json({ message: "Error fetching movies" });
+    const errorMessage = err instanceof Error ? err.message : "Unknown error";
+    return res
+      .status(500)
+      .json({ message: "Error fetching movies", error: errorMessage });
+  }
+};
+
+export const getMovieById = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<Response> => {
+  const { id } = req.params;
+  try {
+    if (id) {
+      const result = await esClient.get({
+        index: "movies",
+        id: id as string,
+      });
+
+      if (!result.found) {
+        return res.status(404).json({ message: "Movie not found" });
+      }
+
+      const averageRating = await prisma.rate.aggregate({
+        where: { movieId: parseInt(id as string) },
+        _avg: { score: true },
+      });
+
+      const userID: number | undefined = req.user?.id;
+      const userRating = await prisma.rate.findFirst({
+        where: { movieId: parseInt(id as string), userId: userID },
+      });
+
+      const movie = result._source as ElasticsearchMovie;
+      // console.log("movie genres", movie.genres);
+
+      const genreIdArray = await prisma.genre
+        .findMany({
+          where: { name: { in: movie.genres } },
+          select: { id: true },
+        })
+        .then((genres) => genres.map((genre) => genre.id.toString())); // Convert to string
+
+      const formattedMovie: FormattedMovie = {
+        id: result._id,
+        title: movie.title,
+        image: movie.image
+          ? movie.image.startsWith("http")
+            ? movie.image
+            : `${process.env.APP_URL}/images/${movie.image}`
+          : "default-image-url.jpg",
+        releaseDate: movie.releaseDate,
+        description: movie.description,
+        createdBy: movie.createdBy,
+        genres: movie.genres,
+        genreIds: genreIdArray,
+        averageRating: averageRating._avg.score ?? null,
+        userRating: userRating?.score ?? 0,
+        duration: movie.duration ?? null,
+      };
+
+      return res.json({
+        message: "Movie",
+        movie: formattedMovie,
+      });
+    }
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : "Unknown error";
+    return res
+      .status(500)
+      .json({ message: "Error fetching movies", error: errorMessage });
   }
 };
 
 // Update Movie Controller
 export const updateMovie = async (
-  req: Request,
+  req: AuthenticatedRequest,
   res: Response
 ): Promise<Response> => {
   const { id } = req.params;
-
   try {
-    // Validate the request body using the updateMovieSchema
-    const movieData = updateMovieSchema.parse(req.body);
+    const movieData: Partial<MovieData> = updateMovieSchema.parse(req.body);
 
-    // Check if the movie exists
-    const movie = await prisma.movie.findUnique({
+    // Check if the movie exists in the database
+    const existingMovie = await prisma.movie.findUnique({
       where: { id: parseInt(id) },
+      include: { genres: { include: { genre: true } } },
     });
 
-    if (!movie) {
+    if (!existingMovie) {
       return res.status(404).json({ message: "Movie not found" });
     }
 
-    let imageName = movie.image; // Keep the current image by default
+    let imageName: string = existingMovie.image || "default-image.jpg";
 
-    // If an image is provided, validate and upload the new image
-    if (req.files && req.files.image) {
+    // Handle image upload
+    if (req.files && "image" in req.files) {
       const movieImage = req.files.image as UploadedFile;
 
-      // Validate the new image
-      const validationMessages = imageValidator(
+      const validationMessages: string | null = imageValidator(
         movieImage.size,
         movieImage.mimetype
       );
@@ -236,20 +413,18 @@ export const updateMovie = async (
         return res.status(400).json({ message: validationMessages });
       }
 
-      // Generate a new image name and upload it
-      const imgExt = movieImage.name.split(".").pop();
+      const imgExt: string | undefined = movieImage.name.split(".").pop();
       imageName = `${generateRandom()}.${imgExt}`;
-      const uploadPath = path.join(
+      const uploadPath: string = path.join(
         process.cwd(),
         "public",
         "images",
         imageName
       );
 
-      // Ensure the directory exists and move the new image
       ensureDirectoryExistence(uploadPath);
       await new Promise<void>((resolve, reject) => {
-        movieImage.mv(uploadPath, (err) => {
+        movieImage.mv(uploadPath, (err: Error | null) => {
           if (err) {
             console.error("Error during file upload:", err);
             reject(err);
@@ -259,44 +434,82 @@ export const updateMovie = async (
         });
       });
 
-      // Remove the old image if a new one was uploaded
-      if (movie.image) {
-        removeImage(movie.image);
+      if (existingMovie.image && existingMovie.image !== "default-image.jpg") {
+        removeImage(existingMovie.image);
       }
     }
 
-    // Update movie details in the database
     const updatedMovie = await prisma.movie.update({
       where: { id: parseInt(id) },
       data: {
-        title: movieData.title || movie.title,
+        title: movieData.title || existingMovie.title,
         image: imageName,
-        releaseDate: movieData.releaseDate || movie.releaseDate,
-        genres: movieData.genres
-          ? {
-              deleteMany: {},
-              create: movieData.genres.map((genreId: number) => ({
-                genre: { connect: { id: genreId } },
-              })),
-            }
-          : undefined,
+        releaseDate: movieData.releaseDate || existingMovie.releaseDate,
+        duration: movieData.duration || existingMovie.duration,
+        description: movieData.description || existingMovie.description,
+        createdAt: new Date(),
+        genres: {
+          deleteMany: {},
+          create: movieData.genres.map((genreId: number) => ({
+            genre: { connect: { id: genreId } },
+          })),
+        },
+      },
+      include: { genres: { include: { genre: true } } },
+    });
+
+    // Fetch the updated movie with genres
+    const movieWithGenres = await prisma.movie.findUnique({
+      where: { id: parseInt(id) },
+      include: { genres: { include: { genre: true } } },
+    });
+
+    if (!movieWithGenres) {
+      return res.status(404).json({ message: "Updated movie not found" });
+    }
+
+    // Prepare data for Elasticsearch
+    const elasticsearchMovie: ElasticsearchMovie = {
+      title: movieWithGenres.title,
+      image: movieWithGenres.image,
+      releaseDate: movieWithGenres.releaseDate || 0,
+      description: movieWithGenres.description || "",
+      createdBy: movieWithGenres.createdBy,
+      genres: movieWithGenres.genres.map((g) => g.genre.name),
+      averageRating: null, // Assuming this is not updated here
+      duration: movieWithGenres.duration,
+      createdAt: new Date().toISOString(),
+    };
+
+    // Update movie in Elasticsearch
+    await esClient.update({
+      index: "movies",
+      id: id,
+      body: {
+        doc: elasticsearchMovie,
       },
     });
 
+    // Prepare the response with genres
+    const responseMovie = {
+      ...movieWithGenres,
+      genres: movieWithGenres.genres.map((g) => g.genre),
+    };
+
     return res.json({
-      message: "Movie updated successfully",
+      message: "Movie updated successfully in database and Elasticsearch",
       movie: updatedMovie,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (error instanceof ZodError) {
       const errors = formatError(error);
       return res.status(422).json({ message: "Invalid data", errors });
     } else {
-      return res.status(500).json({ message: "Something wrong" });
+      console.error("Error updating movie:", error);
+      return res.status(500).json({ message: "Something went wrong" });
     }
   }
 };
-
 export const deleteMovie = async (
   req: Request,
   res: Response
@@ -304,56 +517,58 @@ export const deleteMovie = async (
   const { id } = req.params;
 
   try {
-    // Check if the id is a valid number
-    const movieId = parseInt(id);
-    if (isNaN(movieId)) {
-      return res.status(400).json({ message: "Invalid movie ID" });
-    }
-
-    // Check if the movie exists
-    const movie = await prisma.movie.findUnique({
-      where: { id: movieId },
+    const existingMovie = await esClient.get({
+      index: "movies",
+      id: id,
     });
 
-    if (!movie) {
+    if (!existingMovie.found) {
       return res.status(404).json({ message: "Movie not found" });
     }
 
-    // Remove the associated image from the server
-    if (movie.image) {
-      removeImage(movie.image);
+    const existingMovieSource = existingMovie._source as ElasticsearchMovie;
+    if (
+      existingMovieSource.image &&
+      existingMovieSource.image !== "default-image.jpg"
+    ) {
+      removeImage(existingMovieSource.image);
     }
 
-    // Delete the movie from the database
-    await prisma.movie.delete({
-      where: { id: movieId },
+    await esClient.delete({
+      index: "movies",
+      id: id,
     });
 
     return res.json({ message: "Movie deleted successfully" });
-  } catch (err) {
-    console.error("Error deleting movie:", err); // Log the error for debugging
+  } catch (err: unknown) {
+    console.error("Error deleting movie:", err);
     return res
       .status(500)
-      .json({ message: "Error deleting movie", error: err.message });
+      .json({ message: "Error deleting movie", error: (err as Error).message });
   }
 };
 
-// Rateing movie
-export const addRating = async (req: AuthenticatedRequest, res: Response) => {
+// Rating movie
+export const addRating = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<Response> => {
   try {
     const { movieId, score } = req.body;
-    const userId = req.user?.id; // Assuming user is authenticated and req.user is available
+    const userId = req.user?.id;
 
-    // Validate if score is between 0 and 10
     if (score < 0 || score > 5) {
       return res.status(400).json({ error: "Score must be between 0 and 5." });
     }
 
-    // Check if the user has already rated this movie
+    if (!userId) {
+      return res.status(401).json({ error: "Login required for rating." });
+    }
+
     const existingRating = await prisma.rate.findFirst({
       where: {
         userId: userId,
-        movieId: movieId,
+        movieId: parseInt(movieId),
       },
     });
 
@@ -363,91 +578,20 @@ export const addRating = async (req: AuthenticatedRequest, res: Response) => {
         .json({ error: "You have already rated this movie." });
     }
 
-    if (userId !== undefined) {
-      // If not rated, create a new rating
-      const newRating = await prisma.rate.create({
-        data: {
-          score,
-          movieId,
-          userId,
-        },
-      });
-    } else {
-      throw new Error("Login for rating...");
-    }
-
-    return res.status(201).json({ message: "Rated successfully" });
-  } catch (error) {
-    return res
-      .status(500)
-      .json({ error: "An error occurred while adding the rating." });
-  }
-};
-
-// Fetch Movie by ID Controller
-export const getMovieById = async (
-  req: Request,
-  res: Response
-): Promise<Response> => {
-  const { id } = req.params;
-
-  try {
-    // Fetch the movie from the database by its ID, along with related genres, creator, and ratings
-    const movie = await prisma.movie.findUnique({
-      where: { id: parseInt(id) },
-      include: {
-        genres: {
-          select: {
-            genre: true, // Include genre details
-          },
-        },
-        user: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true, // Include movie creator details
-          },
-        },
-        ratings: {
-          select: {
-            score: true, // Include ratings
-          },
-        },
+    await prisma.rate.create({
+      data: {
+        score,
+        movieId: parseInt(movieId),
+        userId,
       },
     });
 
-    // Check if the movie exists
-    if (!movie) {
-      return res.status(404).json({ message: "Movie not found" });
-    }
-
-    // Format the movie response
-    const formattedMovie = {
-      id: movie.id,
-      title: movie.title,
-      image: movie.image.startsWith("http")
-        ? movie.image
-        : `${process.env.APP_URL}/images/${movie.image}`,
-      releaseDate: movie.releaseDate,
-      description: movie.description,
-      createdBy: `${movie.user.firstName} ${movie.user.lastName}`,
-      genres: movie.genres.map((g) => ({
-        id: g.genre.id,
-        name: g.genre.name,
-      })),
-      averageRating:
-        movie.ratings.length > 0
-          ? movie.ratings.reduce((acc, rating) => acc + rating.score, 0) /
-            movie.ratings.length
-          : null,
-    };
-
-    return res.json({
-      message: "Movie fetched successfully",
-      movie: formattedMovie,
-    });
-  } catch (err) {
-    return res.status(500).json({ message: "Error fetching movie" });
+    return res.status(201).json({ message: "Rated successfully" });
+  } catch (error) {
+    console.error("Error adding rating:", error);
+    return res
+      .status(500)
+      .json({ error: "An error occurred while adding the rating." });
   }
 };
 
@@ -458,13 +602,12 @@ export const getRelatedMovies = async (
   const { id } = req.params;
 
   try {
-    // Fetch the movie with its genres
     const movie = await prisma.movie.findUnique({
       where: { id: parseInt(id) },
       include: {
         genres: {
           select: {
-            genreId: true, // Get genre IDs of the movie
+            genreId: true,
           },
         },
       },
@@ -474,19 +617,17 @@ export const getRelatedMovies = async (
       return res.status(404).json({ message: "Movie not found" });
     }
 
-    // Get genre IDs from the current movie
     const genreIds = movie.genres.map((g) => g.genreId);
 
-    // Fetch related movies that share at least one genre
     const relatedMovies = await prisma.movie.findMany({
       where: {
         id: {
-          not: movie.id, // Exclude the current movie
+          not: movie.id,
         },
         genres: {
           some: {
             genreId: {
-              in: genreIds, // Find movies that have at least one matching genre
+              in: genreIds,
             },
           },
         },
@@ -494,14 +635,13 @@ export const getRelatedMovies = async (
       include: {
         genres: {
           select: {
-            genre: true, // Include genre details
+            genre: true,
           },
         },
       },
-      take: 5, // Limit to 5 related movies
+      take: 5,
     });
 
-    // Format the response
     const movies = relatedMovies.map((movie) => ({
       id: movie.id,
       title: movie.title,
@@ -516,87 +656,20 @@ export const getRelatedMovies = async (
       movies,
     });
   } catch (error) {
+    console.error("Error fetching related movies:", error);
     return res.status(500).json({ message: "Error fetching related movies" });
   }
 };
 
-export const getAllGenres = async (req: Request, res: Response) => {
+export const getAllGenres = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
   try {
-    const genres = await prisma.genre.findMany(); // Fetch all genres from the Genre table
+    const genres = await prisma.genre.findMany();
     return res.status(200).json(genres);
   } catch (error) {
     console.error("Error fetching genres:", error);
     return res.status(500).json({ message: "Error fetching genres" });
-  }
-};
-
-// Search Movies Controller
-export const searchMovies = async (
-  req: Request,
-  res: Response
-): Promise<Response> => {
-  const { query } = req.query;
-
-  if (!query || typeof query !== "string") {
-    return res.status(400).json({ message: "Search query is required" });
-  }
-
-  try {
-    // Fetch movies that contain the query string (case-insensitive)
-    const movies = await prisma.movie.findMany({
-      where: {
-        title: {
-          contains: query,
-          mode: "insensitive", // Case-insensitive search
-        },
-      },
-      include: {
-        genres: {
-          select: {
-            genre: true, // Include genre details
-          },
-        },
-        user: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true, // Include movie creator details
-          },
-        },
-        ratings: {
-          select: {
-            score: true, // Include ratings
-          },
-        },
-      },
-    });
-
-    if (movies.length === 0) {
-      return res.status(404).json({ message: "No movies found" });
-    }
-
-    // Format the response
-    const formattedMovies = movies.map((movie) => ({
-      id: movie.id,
-      title: movie.title,
-      image: movie.image.startsWith("http")
-        ? movie.image
-        : `${process.env.APP_URL}/images/${movie.image}`,
-      releaseDate: movie.releaseDate,
-      averageRating:
-        movie.ratings.length > 0
-          ? movie.ratings.reduce((acc, rating) => acc + rating.score, 0) /
-            movie.ratings.length
-          : null,
-      genres: movie.genres.map((g) => g.genre.name),
-    }));
-
-    return res.status(200).json({
-      message: "Movies found successfully",
-      movies: formattedMovies,
-    });
-  } catch (err) {
-    console.error("Error during movie search:", err);
-    return res.status(500).json({ message: "Error searching movies" });
   }
 };

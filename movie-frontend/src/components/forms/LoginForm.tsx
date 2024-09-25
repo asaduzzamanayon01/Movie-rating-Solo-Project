@@ -3,10 +3,11 @@
 
 import Link from "next/link";
 import { useContext, useState } from "react";
-import { AuthContext } from "../../app/context/AuthContext";
+import { AuthContext } from "../../context/AuthContext";
 import Cookies from "js-cookie";
 import { toast } from "sonner";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
+
 interface FormData {
   email: string;
   password: string;
@@ -27,13 +28,15 @@ interface Errors {
 }
 
 const LoginForm = () => {
-  const { loading, setLoading } = useContext(AuthContext)!;
+  const { loading, setLoading } = useContext(AuthContext)!; // Ensure loading is destructured here
   const router = useRouter();
   const [formData, setFormData] = useState<FormData>({
     email: "",
     password: "",
   });
   const [errors, setErrors] = useState<Errors>({});
+  const { handleLogin } = useContext(AuthContext)!;
+  const pathname = usePathname();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
@@ -57,15 +60,12 @@ const LoginForm = () => {
 
       if (response.ok) {
         const data = await response.json();
-        console.log(data.token);
-        Cookies.set("token", data.token);
         Cookies.set("userId", data.user.id);
-        Cookies.set("firstName", data.user.firstName);
-        console.log(Cookies.get("token"));
+        handleLogin(data.token, data.user.firstName);
         toast.success("Login Successfully");
         setTimeout(() => {
-          router.push("/movies");
-        }, 1000);
+          router.replace("/movies");
+        }, 500);
       } else {
         const errorData = await response.json();
         if (errorData.errors) {
@@ -142,7 +142,7 @@ const LoginForm = () => {
         </button>
       </form>
       <p className="text-center mt-2">
-        Do not have an account ?{" "}
+        Do not have an account?{" "}
         <strong>
           <Link href="/register">Register</Link>
         </strong>
