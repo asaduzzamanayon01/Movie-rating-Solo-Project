@@ -1,6 +1,6 @@
-/* eslint-disable @next/next/no-img-element */
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Eye } from "lucide-react";
 
 interface Movie {
   id: number;
@@ -8,6 +8,7 @@ interface Movie {
   image: string;
   releaseDate: number;
   genres: string[];
+  viewCount: number;
 }
 
 interface RelatedMoviesProps {
@@ -41,8 +42,57 @@ const RelatedMovies: React.FC<RelatedMoviesProps> = ({ movieId }) => {
     fetchRelatedMovies();
   }, [movieId]);
 
+  const truncateTitle = (title: string, maxLength: number) => {
+    if (title.length <= maxLength) return title;
+    return `${title.slice(0, maxLength)}...`;
+  };
+
+  const MovieCard = ({ movie }: { movie: Movie }) => (
+    <div
+      onClick={() => router.push(`/movie/${movie.id}`)}
+      className="flex bg-slate-950 text-white rounded-lg shadow-lg p-2 hover:bg-gray-800 transition"
+    >
+      <img
+        src={movie.image}
+        alt={movie.title}
+        className="w-20 h-auto object-cover rounded-lg mr-4"
+      />
+      <div className="flex flex-col justify-center">
+        <h4 className="text-xl font-semibold" title={movie.title}>
+          {truncateTitle(movie.title, 30)}
+        </h4>
+        <p className="text-sm mt-1">Released: {movie.releaseDate}</p>
+        <p className="text-sm mt-1">Released: {movie.genres.join(",")}</p>
+        <div className="flex items-center text-sm">
+          <Eye size={16} className="mr-1" />
+          <span>{movie.viewCount}</span>
+        </div>
+      </div>
+    </div>
+  );
+
+  const SkeletonCard = () => (
+    <div className="flex bg-slate-950 text-white rounded-lg shadow-lg p-2">
+      <div className="w-20 h-28 bg-gray-700 rounded-lg mr-4 animate-pulse"></div>
+      <div className="flex flex-col justify-center w-full">
+        <div className="h-6 bg-gray-700 rounded w-3/4 mb-2 animate-pulse"></div>
+        <div className="h-4 bg-gray-700 rounded w-1/2 mb-2 animate-pulse"></div>
+        <div className="h-4 bg-gray-700 rounded w-1/4 animate-pulse"></div>
+      </div>
+    </div>
+  );
+
   if (loading) {
-    return <p className="text-center">Loading related movies...</p>;
+    return (
+      <div className="w-full">
+        <h3 className="text-2xl font-bold text-white mb-5">Related Movies</h3>
+        <div className="space-y-3">
+          {[...Array(5)].map((_, index) => (
+            <SkeletonCard key={index} />
+          ))}
+        </div>
+      </div>
+    );
   }
 
   if (relatedMovies.length === 0) {
@@ -54,22 +104,7 @@ const RelatedMovies: React.FC<RelatedMoviesProps> = ({ movieId }) => {
       <h3 className="text-2xl font-bold text-white mb-5">Related Movies</h3>
       <div className="space-y-3">
         {relatedMovies.map((movie) => (
-          <div
-            onClick={() => router.push(`/movie/${movie.id}`)}
-            key={movie.id}
-            className="flex bg-slate-950 text-white rounded-lg shadow-lg p-2 hover:bg-gray-800 transition"
-          >
-            <img
-              src={movie.image}
-              alt={movie.title}
-              className="w-20 h-auto object-cover rounded-lg mr-4"
-            />
-            <div className="flex flex-col justify-center">
-              <h4 className="text-xl font-semibold truncate">{movie.title}</h4>
-              <p className="text-sm mt-1">Released: {movie.releaseDate}</p>
-              <p className="text-sm">Genre: {movie.genres.join(", ")}</p>
-            </div>
-          </div>
+          <MovieCard key={movie.id} movie={movie} />
         ))}
       </div>
     </div>

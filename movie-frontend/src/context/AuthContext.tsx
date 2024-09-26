@@ -52,11 +52,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   useEffect(() => {
-    checkAuth(); // Initial check on mount
-  }, []);
-
-  useEffect(() => {
-    checkAuth(); // Check auth on every pathname change
+    checkAuth();
   }, [pathname]);
 
   const handleLogin = (token: string, firstName: string) => {

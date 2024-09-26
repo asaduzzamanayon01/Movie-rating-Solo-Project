@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Cookies from "js-cookie";
 import RelatedMovies from "../../../components/RelatedMovies";
 import { Rating } from "@/components/Rating";
-import { toast } from "sonner";
+import { ToastContainer, toast } from "react-toastify";
 
 interface Movie {
   id: number;
@@ -26,7 +26,7 @@ const MovieDetailPage = () => {
   const { id } = useParams();
   const [movie, setMovie] = useState<Movie | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
-  const [rating, setRating] = useState<number>(0); // State to store the selected rating
+  const [, setRating] = useState<number>(0); // State to store the selected rating
 
   const fetchMovie = async () => {
     try {
@@ -93,6 +93,7 @@ const MovieDetailPage = () => {
 
   return (
     <div className="relative bg-gray-100 min-h-screen">
+      <ToastContainer position="top-right" />
       {/* Background Image and Related Movies Section */}
       <div className="flex flex-col md:flex-row">
         {/* Background with Title */}
@@ -112,7 +113,7 @@ const MovieDetailPage = () => {
         </div>
 
         {/* Related Movies (scrollable) */}
-        <div className="w-full md:w-1/3 h-[600px] bg-gray-900 text-white p-5 overflow-y-auto space-y-4">
+        <div className="w-full md:w-1/3 h-[600px] bg-gray-900 text-white p-5 overflow-y-auto space-y-4 no-scrollbar">
           <RelatedMovies movieId={movie.id} />
         </div>
       </div>

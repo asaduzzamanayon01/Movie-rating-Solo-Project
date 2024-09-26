@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useContext, useState } from "react";
 import { AuthContext } from "../../context/AuthContext";
 import Cookies from "js-cookie";
-import { toast } from "sonner";
+import { toast } from "react-toastify";
 import { useRouter, usePathname } from "next/navigation";
 
 interface FormData {
