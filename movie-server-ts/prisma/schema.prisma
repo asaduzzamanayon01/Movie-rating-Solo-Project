@@ -36,6 +36,8 @@ model Movie {
   user         User      @relation("CreatedBy", fields: [createdBy], references: [id])
   ratings      Rate[]    @relation("MovieRated") // Remove onDelete: Cascade
   genres       MovieGenre[]
+
+  suggestions MovieSuggestion[]
 }
 
 model Rate {
@@ -65,4 +67,27 @@ model MovieGenre {
   genre    Genre   @relation(fields: [genreId], references: [id], onDelete: Cascade)
 
   @@id([movieId, genreId]) // Composite primary key
+}
+
+model IpView {
+  id        Int      @id @default(autoincrement())
+  ipAddress String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  suggestions MovieSuggestion[]
+}
+
+model MovieSuggestion {
+  id        Int      @id @default(autoincrement())
+  ipViewId  Int
+  movieId   Int
+  viewCount Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ipView IpView @relation(fields: [ipViewId], references: [id])
+  movie  Movie  @relation(fields: [movieId], references: [id])
+
+  @@unique([ipViewId, movieId])
 }

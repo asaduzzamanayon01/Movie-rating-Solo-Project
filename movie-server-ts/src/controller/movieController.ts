@@ -347,7 +347,11 @@ export const getMovieById = async (
           where: { name: { in: movie.genres } },
           select: { id: true },
         })
-        .then((genres) => genres.map((genre) => genre.id.toString())); // Convert to string
+        .then((genres) => genres.map((genre) => genre.id.toString())); // Convert to
+
+      const userName = await prisma.user.findFirst({
+        where: { id: userID },
+      });
 
       const formattedMovie: FormattedMovie = {
         id: result._id,
@@ -359,7 +363,7 @@ export const getMovieById = async (
           : "default-image-url.jpg",
         releaseDate: movie.releaseDate,
         description: movie.description,
-        createdBy: movie.createdBy,
+        createdBy: userName?.firstName,
         genres: movie.genres,
         genreIds: genreIdArray,
         averageRating: averageRating._avg.score ?? null,
@@ -598,69 +602,121 @@ export const addRating = async (
 export const getRelatedMovies = async (
   req: Request,
   res: Response
-): Promise<Response> => {
+): Promise<void> => {
   const { id } = req.params;
+  const ipAddress = req.ip;
 
   try {
-    const movie = await prisma.movie.findUnique({
-      where: { id: parseInt(id) },
-      include: {
-        genres: {
-          select: {
-            genreId: true,
-          },
-        },
-      },
+    // Fetch the movie from Elasticsearch
+    const movieResult = await esClient.get({
+      index: "movies",
+      id: id,
     });
 
-    if (!movie) {
-      return res.status(404).json({ message: "Movie not found" });
+    if (!movieResult.found) {
+      res.status(404).json({ message: "Movie not found" });
+      return;
     }
 
-    const genreIds = movie.genres.map((g) => g.genreId);
+    const movie = movieResult._source as any;
+    const genres = movie.genres;
+    const categories = movie.categories || []; // Assuming you've added categories to your Elasticsearch documents
 
-    const relatedMovies = await prisma.movie.findMany({
-      where: {
-        id: {
-          not: movie.id,
-        },
-        genres: {
-          some: {
-            genreId: {
-              in: genreIds,
-            },
-          },
-        },
-      },
-      include: {
-        genres: {
-          select: {
-            genre: true,
-          },
-        },
-      },
-      take: 5,
+    // Record the view in Prisma
+    const ipView = await prisma.ipView.upsert({
+      where: { ipAddress },
+      update: {},
+      create: { ipAddress },
     });
 
-    const movies = relatedMovies.map((movie) => ({
-      id: movie.id,
-      title: movie.title,
-      image: movie.image.startsWith("http")
-        ? movie.image
-        : `${process.env.APP_URL}/images/${movie.image}`,
-      releaseDate: movie.releaseDate,
-      genres: movie.genres.map((g) => g.genre.name),
+    await prisma.movieSuggestion.upsert({
+      where: {
+        ipViewId_movieId: {
+          ipViewId: ipView.id,
+          movieId: parseInt(id),
+        },
+      },
+      update: {
+        viewCount: { increment: 1 },
+      },
+      create: {
+        ipViewId: ipView.id,
+        movieId: parseInt(id),
+        viewCount: 1,
+      },
+    });
+
+    // Fetch related movies using Elasticsearch
+    const result = await esClient.search({
+      index: "movies",
+      body: {
+        query: {
+          bool: {
+            should: [
+              { match: { title: { query: movie.title, boost: 2 } } },
+              { terms: { "categories.keyword": categories, boost: 1.5 } },
+              { terms: { "genres.keyword": genres } },
+            ],
+            must_not: [{ term: { _id: id } }],
+          },
+        },
+        sort: [{ _score: "desc" }, { releaseDate: "desc" }],
+        size: 6,
+      },
+    });
+
+    // Format the response
+    const relatedMovies = result.hits.hits.map((hit: any) => ({
+      id: hit._id,
+      title: hit._source.title,
+      image: hit._source.image.startsWith("http")
+        ? hit._source.image
+        : `${process.env.APP_URL}/images/${hit._source.image}`,
+      releaseDate: hit._source.releaseDate,
+      description: hit._source.description,
+      categories: hit._source.categories || [],
+      genres: hit._source.genres || [],
     }));
 
-    return res.status(200).json({
-      movies,
+    // Fetch view counts for the related movies from Prisma
+    const movieIds = relatedMovies.map((movie) => parseInt(movie.id));
+    const viewCounts = await prisma.movieSuggestion.groupBy({
+      by: ["movieId"],
+      where: {
+        movieId: {
+          in: movieIds,
+        },
+      },
+      _sum: {
+        viewCount: true,
+      },
+    });
+
+    // Create a map of movie ID to view count
+    const viewCountMap = new Map(
+      viewCounts.map((vc) => [vc.movieId, vc._sum.viewCount || 0])
+    );
+
+    // Add view counts to the related movies
+    const relatedMoviesWithViews = relatedMovies.map((movie) => ({
+      ...movie,
+      viewCount: viewCountMap.get(parseInt(movie.id)) || 0,
+    }));
+
+    // Fetch all unique categories from the related movies
+    const allCategories = Array.from(
+      new Set(relatedMoviesWithViews.flatMap((movie) => movie.categories))
+    );
+
+    res.status(200).json({
+      movies: relatedMoviesWithViews,
+      allCategories: allCategories,
     });
   } catch (error) {
     console.error("Error fetching related movies:", error);
-    return res.status(500).json({ message: "Error fetching related movies" });
+    res.status(500).json({ message: "Error fetching related movies" });
   }
 };
-
 export const getAllGenres = async (
   req: Request,
   res: Response

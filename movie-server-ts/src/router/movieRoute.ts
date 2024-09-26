@@ -17,7 +17,7 @@ const movieRoute = express.Router();
 // Use middleware and controllers directly without unnecessary casting
 // movieRoute.get("/search", searchMovies);
 
-movieRoute.get("/movies/:id?", getAllMovies);
+movieRoute.get("/movies", getAllMovies);
 movieRoute.get("/movie/:id", getMovieById);
 movieRoute.post("/movie/create", authMiddleware, createMovie);
 movieRoute.put("/movie/update/:id", authMiddleware, updateMovie);

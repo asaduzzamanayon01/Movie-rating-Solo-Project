@@ -9,7 +9,7 @@ const authenticate_1 = __importDefault(require("../authenticate/authenticate"));
 const movieRoute = express_1.default.Router();
 // Use middleware and controllers directly without unnecessary casting
 // movieRoute.get("/search", searchMovies);
-movieRoute.get("/movies/:id?", movieController_1.getAllMovies);
+movieRoute.get("/movies", movieController_1.getAllMovies);
 movieRoute.get("/movie/:id", movieController_1.getMovieById);
 movieRoute.post("/movie/create", authenticate_1.default, movieController_1.createMovie);
 movieRoute.put("/movie/update/:id", authenticate_1.default, movieController_1.updateMovie);
