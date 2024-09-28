@@ -32,6 +32,7 @@ const express_1 = __importStar(require("express"));
 const mainRoute_1 = __importDefault(require("./router/mainRoute"));
 const express_fileupload_1 = __importDefault(require("express-fileupload"));
 const cors_1 = __importDefault(require("cors"));
+const cookie_parser_1 = __importDefault(require("cookie-parser"));
 const port = process.env.PORT;
 const app = (0, express_1.default)();
 app.use((0, express_fileupload_1.default)());
@@ -40,6 +41,7 @@ app.use(express_1.default.json());
 app.use(express_1.default.static("public"));
 app.use((0, express_1.urlencoded)({ extended: false }));
 app.use("/api", mainRoute_1.default);
+app.use((0, cookie_parser_1.default)());
 app.listen(port, () => {
     console.log(`Server running on port ${port}`);
 });

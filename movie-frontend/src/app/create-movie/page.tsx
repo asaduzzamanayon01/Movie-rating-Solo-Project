@@ -88,6 +88,14 @@ const CreateMovieForm = () => {
     }
   };
 
+  const handleRemoveImage = () => {
+    setFormData({
+      ...formData,
+      image: null,
+    });
+    setImagePreview(null);
+  };
+
   const handleGenreChange = (selectedIds: number[]) => {
     setFormData({
       ...formData,
@@ -110,7 +118,7 @@ const CreateMovieForm = () => {
     formDataToSend.append("genres", JSON.stringify(formData.genreIds));
 
     try {
-      const response = await fetch("http://localhost:8000/api/movie/create", {
+      const response = await fetch("http://localhost:8000/api/movie", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -183,8 +191,8 @@ const CreateMovieForm = () => {
               handleFileChange={handleFileChange}
               imagePreview={imagePreview}
               errors={errors}
+              handleRemoveImage={handleRemoveImage}
             />
-
             <div>
               <input
                 type="date"

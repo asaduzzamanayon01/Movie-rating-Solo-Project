@@ -24,7 +24,7 @@ const RelatedMovies: React.FC<RelatedMoviesProps> = ({ movieId }) => {
     const fetchRelatedMovies = async () => {
       try {
         const response = await fetch(
-          `http://localhost:8000/api/movies/related/${movieId}`
+          `http://localhost:8000/api/movies/${movieId}/related`
         );
         const data = await response.json();
         if (response.ok) {

@@ -8,6 +8,10 @@ import {
   getMovieById,
   getRelatedMovies,
   getAllGenres,
+  addComment,
+  updateComment,
+  deleteComment,
+  getComments,
   // searchMovies,
 } from "../controller/movieController";
 import authMiddleware from "../authenticate/authenticate";
@@ -19,13 +23,19 @@ const movieRoute = express.Router();
 
 movieRoute.get("/movies", getAllMovies);
 movieRoute.get("/movie/:id", getMovieById);
-movieRoute.post("/movie/create", authMiddleware, createMovie);
-movieRoute.put("/movie/update/:id", authMiddleware, updateMovie);
-movieRoute.delete("/movie/delete/:id", authMiddleware, deleteMovie);
-movieRoute.get("/movies/related/:id", getRelatedMovies);
+movieRoute.post("/movie", authMiddleware, createMovie);
+movieRoute.put("/movie/:id", authMiddleware, updateMovie);
+movieRoute.delete("/movie/:id", authMiddleware, deleteMovie);
+movieRoute.get("/movies/:id/related", getRelatedMovies);
 
 // For Rating
 movieRoute.post("/movie-rate", authMiddleware, addRating);
 movieRoute.get("/genres", getAllGenres);
+
+//For comment
+movieRoute.post("/comments", authMiddleware, addComment);
+movieRoute.put("/comments/:id", authMiddleware, updateComment);
+movieRoute.delete("/comments/:id", authMiddleware, deleteComment);
+movieRoute.get("/comments/:movieId", getComments);
 
 export default movieRoute;

@@ -21,6 +21,7 @@ model User {
   updatedAt  DateTime  @updatedAt
   movies     Movie[]   @relation("CreatedBy")
   ratings    Rate[]    @relation("RatedBy")
+    comments   Comment[]
 }
 
 model Movie {
@@ -38,6 +39,7 @@ model Movie {
   genres       MovieGenre[]
 
   suggestions MovieSuggestion[]
+    comments     Comment[]
 }
 
 model Rate {
@@ -90,4 +92,16 @@ model MovieSuggestion {
   movie  Movie  @relation(fields: [movieId], references: [id])
 
   @@unique([ipViewId, movieId])
+}
+
+model Comment {
+  id        Int      @id @default(autoincrement())
+  content   String
+  userId    Int
+  movieId   Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User     @relation(fields: [userId], references: [id])
+  movie     Movie    @relation(fields: [movieId], references: [id])
 }

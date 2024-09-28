@@ -12,7 +12,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getAllGenres = exports.getRelatedMovies = exports.addRating = exports.deleteMovie = exports.updateMovie = exports.getMovieById = exports.getAllMovies = exports.createMovie = void 0;
+exports.getComments = exports.deleteComment = exports.updateComment = exports.addComment = exports.getAllGenres = exports.getRelatedMovies = exports.addRating = exports.deleteMovie = exports.updateMovie = exports.getMovieById = exports.getAllMovies = exports.createMovie = void 0;
 const elasticsearch_1 = require("@elastic/elasticsearch");
 const userdataValidation_1 = require("../validation/userdataValidation");
 const zod_1 = require("zod");
@@ -20,6 +20,10 @@ const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 const helper_1 = require("../utils/helper");
 const db_config_1 = __importDefault(require("../DB/db.config"));
+const commentSchema = zod_1.z.object({
+    content: zod_1.z.string().min(1).max(1000),
+    movieId: zod_1.z.number().int().positive(),
+});
 // Elasticsearch client setup
 const esClient = new elasticsearch_1.Client({
     node: "https://localhost:9200/",
@@ -156,10 +160,24 @@ const getAllMovies = (req, res) => __awaiter(void 0, void 0, void 0, function* (
         // Search by query in title or description
         if (query) {
             searchQuery.bool.must.push({
-                multi_match: {
-                    query: query,
-                    fields: ["title", "description"],
-                    fuzziness: "AUTO",
+                bool: {
+                    should: [
+                        {
+                            multi_match: {
+                                query: query,
+                                fields: ["description"],
+                                fuzziness: "AUTO",
+                            },
+                        },
+                        {
+                            match_phrase_prefix: {
+                                title: {
+                                    query: query,
+                                    max_expansions: 50,
+                                },
+                            },
+                        },
+                    ],
                 },
             });
         }
@@ -209,7 +227,6 @@ const getAllMovies = (req, res) => __awaiter(void 0, void 0, void 0, function* (
             ? result.hits.total
             : ((_a = result.hits.total) === null || _a === void 0 ? void 0 : _a.value) || 0;
         return res.json({
-            message: "Movies fetched successfully",
             movies,
             totalMovies,
         });
@@ -238,12 +255,16 @@ const getMovieById = (req, res) => __awaiter(void 0, void 0, void 0, function* (
                 where: { movieId: parseInt(id) },
                 _avg: { score: true },
             });
-            const userID = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
-            const userRating = yield db_config_1.default.rate.findFirst({
-                where: { movieId: parseInt(id), userId: userID },
-            });
+            const userID = ((_a = req.query) === null || _a === void 0 ? void 0 : _a.userID)
+                ? parseInt(req.query.userID, 10)
+                : undefined;
+            const movieId = parseInt(id);
+            const userRating = userID && movieId
+                ? yield db_config_1.default.rate.findFirst({
+                    where: { movieId, userId: userID },
+                })
+                : null;
             const movie = result._source;
-            // console.log("movie genres", movie.genres);
             const genreIdArray = yield db_config_1.default.genre
                 .findMany({
                 where: { name: { in: movie.genres } },
@@ -251,7 +272,7 @@ const getMovieById = (req, res) => __awaiter(void 0, void 0, void 0, function* (
             })
                 .then((genres) => genres.map((genre) => genre.id.toString())); // Convert to
             const userName = yield db_config_1.default.user.findFirst({
-                where: { id: userID },
+                where: { id: movie.createdBy },
             });
             const formattedMovie = {
                 id: result._id,
@@ -262,6 +283,7 @@ const getMovieById = (req, res) => __awaiter(void 0, void 0, void 0, function* (
                         : `${process.env.APP_URL}/images/${movie.image}`
                     : "default-image-url.jpg",
                 releaseDate: movie.releaseDate,
+                createdUser: movie === null || movie === void 0 ? void 0 : movie.createdBy,
                 description: movie.description,
                 createdBy: userName === null || userName === void 0 ? void 0 : userName.firstName,
                 genres: movie.genres,
@@ -271,7 +293,6 @@ const getMovieById = (req, res) => __awaiter(void 0, void 0, void 0, function* (
                 duration: (_d = movie.duration) !== null && _d !== void 0 ? _d : null,
             };
             return res.json({
-                message: "Movie",
                 movie: formattedMovie,
             });
         }
@@ -473,7 +494,7 @@ const getRelatedMovies = (req, res) => __awaiter(void 0, void 0, void 0, functio
         }
         const movie = movieResult._source;
         const genres = movie.genres;
-        const categories = movie.categories || []; // Assuming you've added categories to your Elasticsearch documents
+        const categories = movie.categories || [];
         // Record the view in Prisma
         const ipView = yield db_config_1.default.ipView.upsert({
             where: { ipAddress },
@@ -511,7 +532,7 @@ const getRelatedMovies = (req, res) => __awaiter(void 0, void 0, void 0, functio
                     },
                 },
                 sort: [{ _score: "desc" }, { releaseDate: "desc" }],
-                size: 6,
+                size: 20, // Increase the size to get more potential matches
             },
         });
         // Format the response
@@ -541,12 +562,16 @@ const getRelatedMovies = (req, res) => __awaiter(void 0, void 0, void 0, functio
         });
         // Create a map of movie ID to view count
         const viewCountMap = new Map(viewCounts.map((vc) => [vc.movieId, vc._sum.viewCount || 0]));
-        // Add view counts to the related movies
-        const relatedMoviesWithViews = relatedMovies.map((movie) => (Object.assign(Object.assign({}, movie), { viewCount: viewCountMap.get(parseInt(movie.id)) || 0 })));
+        // Add view counts to the related movies and sort by view count
+        const relatedMoviesWithViews = relatedMovies
+            .map((movie) => (Object.assign(Object.assign({}, movie), { viewCount: viewCountMap.get(parseInt(movie.id)) || 0 })))
+            .sort((a, b) => b.viewCount - a.viewCount);
+        // Take the top 6 movies after sorting
+        const topRelatedMovies = relatedMoviesWithViews.slice(0, 10);
         // Fetch all unique categories from the related movies
-        const allCategories = Array.from(new Set(relatedMoviesWithViews.flatMap((movie) => movie.categories)));
+        const allCategories = Array.from(new Set(topRelatedMovies.flatMap((movie) => movie.categories)));
         res.status(200).json({
-            movies: relatedMoviesWithViews,
+            movies: topRelatedMovies,
             allCategories: allCategories,
         });
     }
@@ -567,3 +592,113 @@ const getAllGenres = (req, res) => __awaiter(void 0, void 0, void 0, function* (
     }
 });
 exports.getAllGenres = getAllGenres;
+const addComment = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
+    try {
+        const { content, movieId } = commentSchema.parse(req.body);
+        const userId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
+        if (!userId) {
+            return res.status(401).json({ message: "Unauthorized" });
+        }
+        const comment = yield db_config_1.default.comment.create({
+            data: {
+                content,
+                userId,
+                movieId,
+            },
+        });
+        return res
+            .status(201)
+            .json({ message: "Comment added successfully", comment });
+    }
+    catch (error) {
+        if (error instanceof zod_1.z.ZodError) {
+            const errors = (0, helper_1.formatError)(error);
+            return res.status(422).json({ message: "Invalid data", errors });
+        }
+        console.error("Error adding comment:", error);
+        return res.status(500).json({ message: "Something went wrong" });
+    }
+});
+exports.addComment = addComment;
+const updateComment = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
+    try {
+        const { id } = req.params;
+        const { content } = commentSchema.parse(req.body);
+        const userId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
+        if (!userId) {
+            return res.status(401).json({ message: "Unauthorized" });
+        }
+        const comment = yield db_config_1.default.comment.findUnique({
+            where: { id: parseInt(id) },
+        });
+        if (!comment) {
+            return res.status(404).json({ message: "Comment not found" });
+        }
+        if (comment.userId !== userId) {
+            return res.status(403).json({ message: "Forbidden" });
+        }
+        const updatedComment = yield db_config_1.default.comment.update({
+            where: { id: parseInt(id) },
+            data: { content },
+        });
+        return res.json({
+            message: "Comment updated successfully",
+            comment: updatedComment,
+        });
+    }
+    catch (error) {
+        if (error instanceof zod_1.z.ZodError) {
+            const errors = (0, helper_1.formatError)(error);
+            return res.status(422).json({ message: "Invalid data", errors });
+        }
+        console.error("Error updating comment:", error);
+        return res.status(500).json({ message: "Something went wrong" });
+    }
+});
+exports.updateComment = updateComment;
+const deleteComment = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
+    try {
+        const { id } = req.params;
+        const userId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
+        if (!userId) {
+            return res.status(401).json({ message: "Unauthorized" });
+        }
+        const comment = yield db_config_1.default.comment.findUnique({
+            where: { id: parseInt(id) },
+        });
+        if (!comment) {
+            return res.status(404).json({ message: "Comment not found" });
+        }
+        if (comment.userId !== userId) {
+            return res.status(403).json({ message: "Forbidden" });
+        }
+        yield db_config_1.default.comment.delete({
+            where: { id: parseInt(id) },
+        });
+        return res.json({ message: "Comment deleted successfully" });
+    }
+    catch (error) {
+        console.error("Error deleting comment:", error);
+        return res.status(500).json({ message: "Something went wrong" });
+    }
+});
+exports.deleteComment = deleteComment;
+const getComments = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { movieId } = req.params;
+        const comments = yield db_config_1.default.comment.findMany({
+            where: { movieId: parseInt(movieId) },
+            include: { user: { select: { firstName: true, lastName: true } } },
+            orderBy: { createdAt: "desc" },
+        });
+        return res.json({ message: "Comments fetched successfully", comments });
+    }
+    catch (error) {
+        console.error("Error fetching comments:", error);
+        return res.status(500).json({ message: "Something went wrong" });
+    }
+});
+exports.getComments = getComments;

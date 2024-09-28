@@ -136,7 +136,7 @@ const MoviesPage = () => {
 
     try {
       const response = await fetch(
-        `http://localhost:8000/api/movie/delete/${movieToDelete}`,
+        `http://localhost:8000/api/movie/${movieToDelete}`,
         {
           method: "DELETE",
           headers: {
@@ -191,11 +191,11 @@ const MoviesPage = () => {
               className="bg-slate-800 rounded-lg shadow-lg overflow-hidden transform transition duration-300 hover:scale-105 flex flex-col h-full"
               ref={index === movies.length - 1 ? lastMovieElementRef : null}
             >
-              <div className="relative h-80">
+              <div className="relative h-85">
                 <img
                   src={movie.image}
                   alt={movie.title}
-                  className="w-full h-full object-cover hover:cursor-pointer transition duration-300 hover:opacity-75"
+                  className="w-full h-[400px] object-cover hover:cursor-pointer transition duration-300 hover:opacity-75"
                   onClick={() => router.push(`/movie/${movie.id}`)}
                 />
                 <div

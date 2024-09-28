@@ -66,6 +66,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const handleLogout = () => {
     Cookies.remove("token");
     Cookies.remove("firstName");
+    Cookies.remove("userId");
     setIsAuthenticated(false);
     setIsLogedIn(false);
     setUser(null);

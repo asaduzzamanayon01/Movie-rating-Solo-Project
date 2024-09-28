@@ -111,20 +111,11 @@ const UpdateMovieForm = () => {
     });
   };
 
-  const handleFileChange = (
-    e:
-      | React.ChangeEvent<HTMLInputElement>
-      | { target: { files: File[]; name: string } }
-  ) => {
-    const file =
-      "files" in e.target
-        ? e.target.files[0]
-        : e.target.files
-        ? e.target.files[0]
-        : null;
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files ? e.target.files[0] : null;
     setFormData({
       ...formData,
-      [e.target.name]: file,
+      image: file,
     });
     if (file) {
       const reader = new FileReader();
@@ -132,11 +123,16 @@ const UpdateMovieForm = () => {
         setImagePreview(reader.result as string);
       };
       reader.readAsDataURL(file);
-    } else {
-      setImagePreview(null);
     }
   };
 
+  const handleRemoveImage = () => {
+    setFormData({
+      ...formData,
+      image: null,
+    });
+    setImagePreview(null);
+  };
   const handleGenreChange = (selectedIds: string[]) => {
     setFormData({
       ...formData,
@@ -157,18 +153,17 @@ const UpdateMovieForm = () => {
     formDataToSend.append("releaseDate", formData.releaseDate.split("-")[0]);
     formDataToSend.append("description", formData.description);
     formDataToSend.append("genres", JSON.stringify(formData.genreIds));
-
+    if (imagePreview === null) {
+      formDataToSend.append("removeImage", "true");
+    }
     try {
-      const response = await fetch(
-        `http://localhost:8000/api/movie/update/${id}`,
-        {
-          method: "PUT",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          body: formDataToSend,
-        }
-      );
+      const response = await fetch(`http://localhost:8000/api/movie/${id}`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formDataToSend,
+      });
 
       if (response.ok) {
         toast.success("Movie updated successfully!");
@@ -234,6 +229,7 @@ const UpdateMovieForm = () => {
               handleFileChange={handleFileChange}
               imagePreview={imagePreview}
               errors={errors}
+              handleRemoveImage={handleRemoveImage}
             />
 
             <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
