@@ -1,16 +1,17 @@
 /* eslint-disable @next/next/no-img-element */
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 import React, { useState, useEffect, useContext } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { AuthContext } from "../../../context/AuthContext";
-import { toast } from "sonner";
+import { ToastContainer, toast } from "react-toastify";
 import Cookies from "js-cookie";
-import Select from "react-tailwindcss-select";
+import { motion } from "framer-motion";
 import "daisyui";
+import AlphabeticalSelect from "@/components/ui/alphabetical-select-component";
+import FileUploadComponent from "../../../components/ui/file-upload-component";
 
 interface Genre {
-  id: number;
+  id: string;
   name: string;
 }
 
@@ -18,7 +19,7 @@ interface FormData {
   title: string;
   image: File | null;
   releaseDate: string;
-  genres: string[]; // This will be genre IDs
+  genreIds: string[];
   description: string;
 }
 
@@ -26,36 +27,33 @@ interface Errors {
   title?: string;
   image?: string;
   releaseDate?: string;
-  genres?: string;
+  genreIds?: string;
   description?: string;
 }
 
 const UpdateMovieForm = () => {
   const { loading, setLoading } = useContext(AuthContext)!;
   const router = useRouter();
-  const { id } = useParams(); // Get the movie ID from URL params
-
+  const { id } = useParams();
+  const userId = Cookies.get("userId");
   const [formData, setFormData] = useState<FormData>({
     title: "",
     image: null,
     releaseDate: "",
-    genres: [], // Array of genre IDs
+    genreIds: [],
     description: "",
   });
-
   const [errors, setErrors] = useState<Errors>({});
-  const [genres, setGenres] = useState<Genre[]>([]); // All available genres
-  const [selectedGenres, setSelectedGenres] = useState<any[]>([]); // Selected genre objects
+  const [genres, setGenres] = useState<Genre[]>([]);
+  const [selectedGenres, setSelectedGenres] = useState<any[]>([]);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [genreIds, setGenreIds] = useState<number[]>([]); // Only genre IDs
 
-  // Fetch all genres from backend
   useEffect(() => {
     const fetchGenres = async () => {
       try {
-        const response = await fetch("http://localhost:8000/api/all-genre");
+        const response = await fetch("http://localhost:8000/api/genres");
         const data = await response.json();
-        setGenres(data); // Set the available genres
+        setGenres(data);
       } catch (error) {
         console.error("Error fetching genres:", error);
       }
@@ -63,42 +61,33 @@ const UpdateMovieForm = () => {
     fetchGenres();
   }, []);
 
-  // Fetch movie details
   useEffect(() => {
     const fetchMovie = async () => {
       try {
-        const response = await fetch(
-          `http://localhost:8000/api/movie-detail/${id}`
-        );
+        const response = await fetch(`http://localhost:8000/api/movie/${id}`);
         const data = await response.json();
-
         if (response.ok) {
           const movie = data.movie;
 
           const releaseDate = movie.releaseDate
-            ? new Date(movie.releaseDate).toISOString().split("T")[0]
+            ? new Date(movie.releaseDate, 0, 1).toISOString().split("T")[0]
             : "";
 
-          const movieGenres = movie.genres.map(
-            (genre: { id: number; name: string }) => ({
-              value: genre.id.toString(), // Use genre.id as the value (stringified)
-              label: genre.name, // Use genre.name as the label
+          const movieGenres = movie.genreIds.map(
+            (id: string, index: number) => ({
+              value: id,
+              label: movie.genres[index],
             })
-          );
-
-          const genreIdsArray = movie.genres.map(
-            (genre: { id: number }) => genre.id // Extract the IDs
           );
 
           setFormData({
             title: movie.title || "",
             image: null,
             releaseDate: releaseDate,
-            genres: genreIdsArray, // Set genre IDs here
+            genreIds: movie.genreIds.map((id) => Number(id)),
             description: movie.description || "",
           });
-          setSelectedGenres(movieGenres); // Set preselected genres
-          setGenreIds(genreIdsArray); // Store genre IDs in state
+          setSelectedGenres(movieGenres);
           setImagePreview(movie.image);
         } else {
           toast.error("Error fetching movie details");
@@ -112,7 +101,6 @@ const UpdateMovieForm = () => {
     fetchMovie();
   }, [id]);
 
-  // Handle form field changes
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
@@ -135,18 +123,21 @@ const UpdateMovieForm = () => {
         setImagePreview(reader.result as string);
       };
       reader.readAsDataURL(file);
-    } else {
-      setImagePreview(null);
     }
   };
 
-  // Handle genre selection change
-  const handleGenreChange = (value: any) => {
-    const selectedIds = value
-      ? value.map((item: any) => Number(item.value)) // Extract the genre IDs
-      : [];
-    setSelectedGenres(value); // Update selected genres
-    setGenreIds(selectedIds); // Update genre IDs array
+  const handleRemoveImage = () => {
+    setFormData({
+      ...formData,
+      image: null,
+    });
+    setImagePreview(null);
+  };
+  const handleGenreChange = (selectedIds: string[]) => {
+    setFormData({
+      ...formData,
+      genreIds: selectedIds.map((id) => Number(id)),
+    });
   };
 
   const token = Cookies.get("token");
@@ -159,25 +150,26 @@ const UpdateMovieForm = () => {
     const formDataToSend = new FormData();
     formDataToSend.append("title", formData.title);
     if (formData.image) formDataToSend.append("image", formData.image);
-    formDataToSend.append("releaseDate", formData.releaseDate);
+    formDataToSend.append("releaseDate", formData.releaseDate.split("-")[0]);
     formDataToSend.append("description", formData.description);
-    formDataToSend.append("genres", JSON.stringify(genreIds)); // Pass the genre IDs array
-
+    formDataToSend.append("genres", JSON.stringify(formData.genreIds));
+    if (imagePreview === null) {
+      formDataToSend.append("removeImage", "true");
+    }
     try {
-      const response = await fetch(
-        `http://localhost:8000/api/update-movie/${id}`,
-        {
-          method: "PUT",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          body: formDataToSend,
-        }
-      );
+      const response = await fetch(`http://localhost:8000/api/movie/${id}`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formDataToSend,
+      });
 
       if (response.ok) {
         toast.success("Movie updated successfully!");
-        router.push("/movies");
+        setTimeout(() => {
+          router.replace(`/movies?user=${userId}`);
+        }, 1500);
       } else {
         const errorData = await response.json();
         if (errorData.errors) {
@@ -195,127 +187,132 @@ const UpdateMovieForm = () => {
   };
 
   const genreOptions = genres.map((genre) => ({
-    value: genre.id.toString(),
+    value: Number(genre.id),
     label: genre.name,
   }));
 
   return (
-    <div className="bg-white p-8 shadow-md rounded-lg max-w-3xl mx-auto my-8">
-      <form onSubmit={handleSubmit} className="space-y-5">
-        <h1 className="text-4xl font-bold text-center mb-8">Update Movie</h1>
-
-        {/* Title */}
-        <div>
-          <input
-            type="text"
-            name="title"
-            placeholder="Movie Title"
-            value={formData.title}
-            onChange={handleChange}
-            className={`input input-bordered w-full ${
-              errors.title ? "input-error" : ""
-            }`}
-          />
-          {errors.title && (
-            <p className="text-red-500 text-sm mt-1">{errors.title}</p>
-          )}
-        </div>
-
-        {/* Image */}
-        <div>
-          <input
-            type="file"
-            name="image"
-            accept="image/*"
-            onChange={handleFileChange}
-            className={`file-input file-input-bordered w-full ${
-              errors.image ? "input-error" : ""
-            }`}
-          />
-          {errors.image && (
-            <p className="text-red-500 text-sm mt-1">{errors.image}</p>
-          )}
-        </div>
-        {imagePreview && (
-          <div className="mt-4">
-            <img
-              src={imagePreview}
-              alt="Preview"
-              className="w-1/2 h-1/2 rounded-lg"
+    <div className="min-h-screen bg-gray-900 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+      <ToastContainer autoClose={1000} position="top-right" />
+      <motion.div
+        initial={{ opacity: 0, y: -50 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="max-w-3xl w-full space-y-8 bg-yellow-600 p-10 rounded-xl shadow-2xl"
+      >
+        <motion.h1
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.2 }}
+          className="text-4xl font-extrabold text-center text-gold-500"
+        >
+          Update Movie
+        </motion.h1>
+        <form onSubmit={handleSubmit} className="mt-8 space-y-6">
+          <div className="rounded-md shadow-sm -space-y-px">
+            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+              <input
+                type="text"
+                name="title"
+                placeholder="Movie Title"
+                value={formData.title}
+                onChange={handleChange}
+                className={`appearance-none rounded-none relative block w-full px-3 py-2 border ${
+                  errors.title ? "border-red-500" : "border-gray-300"
+                } placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-gold-500 focus:border-gold-500 focus:z-10 sm:text-sm`}
+              />
+              {errors.title && (
+                <p className="text-red-500 text-xs mt-1">{errors.title}</p>
+              )}
+            </motion.div>
+            <FileUploadComponent
+              handleFileChange={handleFileChange}
+              imagePreview={imagePreview}
+              errors={errors}
+              handleRemoveImage={handleRemoveImage}
             />
+
+            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+              <input
+                type="date"
+                name="releaseDate"
+                placeholder="Release Date"
+                value={formData.releaseDate}
+                onChange={handleChange}
+                className={`appearance-none rounded-none relative block w-full px-3 py-2 border ${
+                  errors.releaseDate ? "border-red-500" : "border-gray-300"
+                } placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-gold-500 focus:border-gold-500 focus:z-10 sm:text-sm my-2`}
+              />
+              {errors.releaseDate && (
+                <p className="text-red-500 text-xs mt-1">
+                  {errors.releaseDate}
+                </p>
+              )}
+            </motion.div>
+            <div>
+              <AlphabeticalSelect
+                options={genreOptions}
+                value={formData.genreIds}
+                onChange={handleGenreChange}
+                placeholder="Select Genre"
+                className="rounded-none"
+              />
+              {errors.genreIds && (
+                <p className="text-red-500 text-xs mt-1">{errors.genreIds}</p>
+              )}
+            </div>
+            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+              <textarea
+                name="description"
+                placeholder="Movie Description"
+                value={formData.description}
+                onChange={handleChange}
+                className={`appearance-none rounded-none relative block w-full px-3 py-2 border ${
+                  errors.description ? "border-red-500" : "border-gray-300"
+                } placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-gold-500 focus:border-gold-500 focus:z-10 sm:text-sm mt-2`}
+                rows={4}
+              />
+              {errors.description && (
+                <p className="text-red-500 text-xs mt-1">
+                  {errors.description}
+                </p>
+              )}
+            </motion.div>
           </div>
-        )}
-
-        {/* Release Date */}
-        <div>
-          <input
-            type="date"
-            name="releaseDate"
-            placeholder="Release Date"
-            value={formData.releaseDate}
-            onChange={handleChange}
-            className={`input input-bordered w-full ${
-              errors.releaseDate ? "input-error" : ""
-            }`}
-          />
-          {errors.releaseDate && (
-            <p className="text-red-500 text-sm mt-1">{errors.releaseDate}</p>
-          )}
-        </div>
-
-        {/* Genres */}
-        <div>
-          <Select
-            primaryColor="indigo"
-            value={selectedGenres}
-            onChange={handleGenreChange}
-            options={genreOptions}
-            isMultiple={true}
-            isClearable={true}
-            placeholder="Select Genre"
-            classNames={{
-              tagItem: ({ item }) =>
-                `inline-flex items-center bg-indigo-100 text-indigo-700 rounded px-2 py-1 mr-2 mt-1`,
-              tagItemIcon: `w-4 h-4 ml-2 text-gray-400 hover:text-red-400 cursor-pointer`,
-              menuButton: ({ isDisabled }) =>
-                `text-sm text-gray-500 border border-gray-300 rounded shadow-sm transition-all duration-300 focus:outline-none ${
-                  isDisabled
-                    ? "bg-gray-200"
-                    : "bg-white hover:border-gray-400 focus:border-indigo-500"
-                }`,
-            }}
-          />
-          {errors.genres && (
-            <p className="text-red-500 text-sm mt-1">{errors.genres}</p>
-          )}
-        </div>
-
-        {/* Description */}
-        <div>
-          <textarea
-            name="description"
-            placeholder="Movie Description"
-            value={formData.description}
-            onChange={handleChange}
-            className={`textarea textarea-bordered w-full ${
-              errors.description ? "textarea-error" : ""
-            }`}
-          />
-          {errors.description && (
-            <p className="text-red-500 text-sm mt-1">{errors.description}</p>
-          )}
-        </div>
-
-        {/* Submit Button */}
-        <div className="text-center">
-          <button
-            type="submit"
-            className={`btn btn-primary w-full ${loading ? "loading" : ""}`}
+          <motion.div
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.8 }}
+            className="text-center"
           >
-            {loading ? "Updating..." : "Update Movie"}
-          </button>
-        </div>
-      </form>
+            <button
+              type="submit"
+              className={`group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-black bg-yellow-800 hover:bg-gold-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gold-500 ${
+                loading ? "opacity-50 cursor-not-allowed" : ""
+              }`}
+              disabled={loading}
+            >
+              {loading ? (
+                <svg className="animate-spin h-5 w-5 mr-3" viewBox="0 0 24 24">
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  ></circle>
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  ></path>
+                </svg>
+              ) : null}
+              {loading ? "Updating..." : "Update Movie"}
+            </button>
+          </motion.div>
+        </form>
+      </motion.div>
     </div>
   );
 };

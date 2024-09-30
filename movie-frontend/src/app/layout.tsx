@@ -1,5 +1,6 @@
 "use client";
-import { Toaster } from "sonner";
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 import localFont from "next/font/local";
 import "./globals.css";
 import { AuthProvider } from "../context/AuthContext";
@@ -35,15 +36,11 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-black`}
       >
-        {/* AuthProvider wrapping the entire layout */}
         <AuthProvider>
           <Navbar />
-          {/* Conditionally rendering the Categories component */}
           {pathname === "/movies" && <Categories />}
-          {/* Global toaster for notifications */}
-          <Toaster position="top-right" richColors />
-          {/* Rendering the page content */}
-          {children}
+          <ToastContainer autoClose={1000} position="top-right" />
+          <div className="min-h-[500px]">{children}</div>
           <Footer />
         </AuthProvider>
       </body>

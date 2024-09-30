@@ -238,7 +238,7 @@ const RegisterForm = () => {
       <p className="text-center mt-2">
         Already have an account ?{" "}
         <strong>
-          <Link href="/login">Login</Link>
+          <Link href="/login?from=register">Login</Link>
         </strong>
       </p>
     </div>
