@@ -3,11 +3,12 @@
 import React, { useState, useEffect, useContext } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { AuthContext } from "../../../context/AuthContext";
-import { toast } from "sonner";
+import { ToastContainer, toast } from "react-toastify";
 import Cookies from "js-cookie";
 import { motion } from "framer-motion";
 import "daisyui";
 import AlphabeticalSelect from "@/components/ui/alphabetical-select-component";
+import FileUploadComponent from "../../../components/ui/file-upload-component";
 
 interface Genre {
   id: string;
@@ -122,11 +123,16 @@ const UpdateMovieForm = () => {
         setImagePreview(reader.result as string);
       };
       reader.readAsDataURL(file);
-    } else {
-      setImagePreview(null);
     }
   };
 
+  const handleRemoveImage = () => {
+    setFormData({
+      ...formData,
+      image: null,
+    });
+    setImagePreview(null);
+  };
   const handleGenreChange = (selectedIds: string[]) => {
     setFormData({
       ...formData,
@@ -147,18 +153,17 @@ const UpdateMovieForm = () => {
     formDataToSend.append("releaseDate", formData.releaseDate.split("-")[0]);
     formDataToSend.append("description", formData.description);
     formDataToSend.append("genres", JSON.stringify(formData.genreIds));
-
+    if (imagePreview === null) {
+      formDataToSend.append("removeImage", "true");
+    }
     try {
-      const response = await fetch(
-        `http://localhost:8000/api/movie/update/${id}`,
-        {
-          method: "PUT",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          body: formDataToSend,
-        }
-      );
+      const response = await fetch(`http://localhost:8000/api/movie/${id}`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formDataToSend,
+      });
 
       if (response.ok) {
         toast.success("Movie updated successfully!");
@@ -188,6 +193,7 @@ const UpdateMovieForm = () => {
 
   return (
     <div className="min-h-screen bg-gray-900 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+      <ToastContainer autoClose={1000} position="top-right" />
       <motion.div
         initial={{ opacity: 0, y: -50 }}
         animate={{ opacity: 1, y: 0 }}
@@ -219,34 +225,13 @@ const UpdateMovieForm = () => {
                 <p className="text-red-500 text-xs mt-1">{errors.title}</p>
               )}
             </motion.div>
-            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-              <input
-                type="file"
-                name="image"
-                accept="image/*"
-                onChange={handleFileChange}
-                className={`appearance-none rounded-none relative block w-full px-3 py-2 border ${
-                  errors.image ? "border-red-500" : "border-gray-300"
-                } placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-gold-500 focus:border-gold-500 focus:z-10 sm:text-sm my-3`}
-              />
-              {errors.image && (
-                <p className="text-red-500 text-xs mt-1">{errors.image}</p>
-              )}
-            </motion.div>
-            {imagePreview && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.5 }}
-                className="mt-4"
-              >
-                <img
-                  src={imagePreview}
-                  alt="Preview"
-                  className="w-full h-64 object-cover rounded-md"
-                />
-              </motion.div>
-            )}
+            <FileUploadComponent
+              handleFileChange={handleFileChange}
+              imagePreview={imagePreview}
+              errors={errors}
+              handleRemoveImage={handleRemoveImage}
+            />
+
             <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
               <input
                 type="date"

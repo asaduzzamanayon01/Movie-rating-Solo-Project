@@ -1,12 +1,10 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
-
 import Link from "next/link";
-import { useContext, useState } from "react";
+import { useContext, useState, useEffect } from "react";
 import { AuthContext } from "../../context/AuthContext";
 import Cookies from "js-cookie";
-import { toast } from "sonner";
-import { useRouter, usePathname } from "next/navigation";
+import { toast } from "react-toastify";
+import { useRouter, useSearchParams } from "next/navigation";
 
 interface FormData {
   email: string;
@@ -28,7 +26,7 @@ interface Errors {
 }
 
 const LoginForm = () => {
-  const { loading, setLoading } = useContext(AuthContext)!; // Ensure loading is destructured here
+  const { loading, setLoading } = useContext(AuthContext)!;
   const router = useRouter();
   const [formData, setFormData] = useState<FormData>({
     email: "",
@@ -36,7 +34,15 @@ const LoginForm = () => {
   });
   const [errors, setErrors] = useState<Errors>({});
   const { handleLogin } = useContext(AuthContext)!;
-  const pathname = usePathname();
+  const [fromRegister, setFromRegister] = useState<boolean>(false);
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const from = searchParams.get("from");
+    if (from === "register") {
+      setFromRegister(true);
+    }
+  }, [searchParams]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
@@ -44,7 +50,6 @@ const LoginForm = () => {
       [e.target.name]: e.target.value,
     });
   };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -64,7 +69,11 @@ const LoginForm = () => {
         handleLogin(data.token, data.user.firstName);
         toast.success("Login Successfully");
         setTimeout(() => {
-          router.replace("/movies");
+          if (fromRegister) {
+            router.push("/movies"); // Go to /movies if coming from /register
+          } else {
+            router.back(); // Go back to the previous page for other routes
+          }
         }, 500);
       } else {
         const errorData = await response.json();

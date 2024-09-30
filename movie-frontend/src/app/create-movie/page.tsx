@@ -3,12 +3,13 @@
 "use client";
 import React, { useState, useEffect, useContext } from "react";
 import { AuthContext } from "../../context/AuthContext";
-import { toast } from "sonner";
 import Cookies from "js-cookie";
 import { useRouter } from "next/navigation";
 import "daisyui";
 import AlphabeticalSelect from "@/components/ui/alphabetical-select-component";
 import { motion } from "framer-motion";
+import FileUploadComponent from "../../components/ui/file-upload-component";
+import { ToastContainer, toast } from "react-toastify";
 
 interface Genre {
   id: number;
@@ -87,6 +88,14 @@ const CreateMovieForm = () => {
     }
   };
 
+  const handleRemoveImage = () => {
+    setFormData({
+      ...formData,
+      image: null,
+    });
+    setImagePreview(null);
+  };
+
   const handleGenreChange = (selectedIds: number[]) => {
     setFormData({
       ...formData,
@@ -109,7 +118,7 @@ const CreateMovieForm = () => {
     formDataToSend.append("genres", JSON.stringify(formData.genreIds));
 
     try {
-      const response = await fetch("http://localhost:8000/api/movie/create", {
+      const response = await fetch("http://localhost:8000/api/movie", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -145,6 +154,8 @@ const CreateMovieForm = () => {
 
   return (
     <div className="min-h-screen bg-gray-900 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+      <ToastContainer autoClose={1000} position="top-right" />
+
       <motion.div
         initial={{ opacity: 0, y: -50 }}
         animate={{ opacity: 1, y: 0 }}
@@ -176,34 +187,12 @@ const CreateMovieForm = () => {
                 <p className="text-red-500 text-xs mt-1">{errors.title}</p>
               )}
             </motion.div>
-            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-              <input
-                type="file"
-                name="image"
-                accept="image/*"
-                onChange={handleFileChange}
-                className={`appearance-none rounded-none relative block w-full px-3 py-2 border ${
-                  errors.image ? "border-red-500" : "border-gray-300"
-                } placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-gold-500 focus:border-gold-500 focus:z-10 sm:text-sm my-3`}
-              />
-              {errors.image && (
-                <p className="text-red-500 text-xs mt-1">{errors.image}</p>
-              )}
-            </motion.div>
-            {imagePreview && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.5 }}
-                className="mt-4"
-              >
-                <img
-                  src={imagePreview}
-                  alt="Preview"
-                  className="w-full h-64 object-cover rounded-md"
-                />
-              </motion.div>
-            )}
+            <FileUploadComponent
+              handleFileChange={handleFileChange}
+              imagePreview={imagePreview}
+              errors={errors}
+              handleRemoveImage={handleRemoveImage}
+            />
             <div>
               <input
                 type="date"

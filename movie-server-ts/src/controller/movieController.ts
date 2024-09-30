@@ -75,6 +75,11 @@ type SearchQuery = {
   };
 };
 
+const commentSchema = z.object({
+  content: z.string().min(1).max(1000),
+  movieId: z.number().int().positive(),
+});
+
 // Elasticsearch client setup
 const esClient: ElasticsearchClient = new ElasticsearchClient({
   node: "https://localhost:9200/",
@@ -236,10 +241,24 @@ export const getAllMovies = async (
     // Search by query in title or description
     if (query) {
       searchQuery.bool.must.push({
-        multi_match: {
-          query: query as string,
-          fields: ["title", "description"],
-          fuzziness: "AUTO",
+        bool: {
+          should: [
+            {
+              multi_match: {
+                query: query as string,
+                fields: ["description"],
+                fuzziness: "AUTO",
+              },
+            },
+            {
+              match_phrase_prefix: {
+                title: {
+                  query: query as string,
+                  max_expansions: 50,
+                },
+              },
+            },
+          ],
         },
       });
     }
@@ -301,7 +320,6 @@ export const getAllMovies = async (
         : result.hits.total?.value || 0;
 
     return res.json({
-      message: "Movies fetched successfully",
       movies,
       totalMovies,
     });
@@ -334,20 +352,30 @@ export const getMovieById = async (
         _avg: { score: true },
       });
 
-      const userID: number | undefined = req.user?.id;
-      const userRating = await prisma.rate.findFirst({
-        where: { movieId: parseInt(id as string), userId: userID },
-      });
+      const userID: number | undefined = req.query?.userID
+        ? parseInt(req.query.userID as string, 10)
+        : undefined;
+
+      const movieId = parseInt(id as string);
+      const userRating =
+        userID && movieId
+          ? await prisma.rate.findFirst({
+              where: { movieId, userId: userID },
+            })
+          : null;
 
       const movie = result._source as ElasticsearchMovie;
-      // console.log("movie genres", movie.genres);
 
       const genreIdArray = await prisma.genre
         .findMany({
           where: { name: { in: movie.genres } },
           select: { id: true },
         })
-        .then((genres) => genres.map((genre) => genre.id.toString())); // Convert to string
+        .then((genres) => genres.map((genre) => genre.id.toString())); // Convert to
+
+      const userName = await prisma.user.findFirst({
+        where: { id: movie.createdBy },
+      });
 
       const formattedMovie: FormattedMovie = {
         id: result._id,
@@ -358,8 +386,9 @@ export const getMovieById = async (
             : `${process.env.APP_URL}/images/${movie.image}`
           : "default-image-url.jpg",
         releaseDate: movie.releaseDate,
+        createdUser: movie?.createdBy,
         description: movie.description,
-        createdBy: movie.createdBy,
+        createdBy: userName?.firstName,
         genres: movie.genres,
         genreIds: genreIdArray,
         averageRating: averageRating._avg.score ?? null,
@@ -368,7 +397,6 @@ export const getMovieById = async (
       };
 
       return res.json({
-        message: "Movie",
         movie: formattedMovie,
       });
     }
@@ -598,69 +626,126 @@ export const addRating = async (
 export const getRelatedMovies = async (
   req: Request,
   res: Response
-): Promise<Response> => {
+): Promise<void> => {
   const { id } = req.params;
+  const ipAddress = req.ip;
 
   try {
-    const movie = await prisma.movie.findUnique({
-      where: { id: parseInt(id) },
-      include: {
-        genres: {
-          select: {
-            genreId: true,
-          },
-        },
-      },
+    // Fetch the movie from Elasticsearch
+    const movieResult = await esClient.get({
+      index: "movies",
+      id: id,
     });
 
-    if (!movie) {
-      return res.status(404).json({ message: "Movie not found" });
+    if (!movieResult.found) {
+      res.status(404).json({ message: "Movie not found" });
+      return;
     }
 
-    const genreIds = movie.genres.map((g) => g.genreId);
+    const movie = movieResult._source as any;
+    const genres = movie.genres;
+    const categories = movie.categories || [];
 
-    const relatedMovies = await prisma.movie.findMany({
-      where: {
-        id: {
-          not: movie.id,
-        },
-        genres: {
-          some: {
-            genreId: {
-              in: genreIds,
-            },
-          },
-        },
-      },
-      include: {
-        genres: {
-          select: {
-            genre: true,
-          },
-        },
-      },
-      take: 5,
+    // Record the view in Prisma
+    const ipView = await prisma.ipView.upsert({
+      where: { ipAddress },
+      update: {},
+      create: { ipAddress },
     });
 
-    const movies = relatedMovies.map((movie) => ({
-      id: movie.id,
-      title: movie.title,
-      image: movie.image.startsWith("http")
-        ? movie.image
-        : `${process.env.APP_URL}/images/${movie.image}`,
-      releaseDate: movie.releaseDate,
-      genres: movie.genres.map((g) => g.genre.name),
+    await prisma.movieSuggestion.upsert({
+      where: {
+        ipViewId_movieId: {
+          ipViewId: ipView.id,
+          movieId: parseInt(id),
+        },
+      },
+      update: {
+        viewCount: { increment: 1 },
+      },
+      create: {
+        ipViewId: ipView.id,
+        movieId: parseInt(id),
+        viewCount: 1,
+      },
+    });
+
+    // Fetch related movies using Elasticsearch
+    const result = await esClient.search({
+      index: "movies",
+      body: {
+        query: {
+          bool: {
+            should: [
+              { match: { title: { query: movie.title, boost: 2 } } },
+              { terms: { "categories.keyword": categories, boost: 1.5 } },
+              { terms: { "genres.keyword": genres } },
+            ],
+            must_not: [{ term: { _id: id } }],
+          },
+        },
+        sort: [{ _score: "desc" }, { releaseDate: "desc" }],
+        size: 20, // Increase the size to get more potential matches
+      },
+    });
+
+    // Format the response
+    const relatedMovies = result.hits.hits.map((hit: any) => ({
+      id: hit._id,
+      title: hit._source.title,
+      image: hit._source.image.startsWith("http")
+        ? hit._source.image
+        : `${process.env.APP_URL}/images/${hit._source.image}`,
+      releaseDate: hit._source.releaseDate,
+      description: hit._source.description,
+      categories: hit._source.categories || [],
+      genres: hit._source.genres || [],
     }));
 
-    return res.status(200).json({
-      movies,
+    // Fetch view counts for the related movies from Prisma
+    const movieIds = relatedMovies.map((movie) => parseInt(movie.id));
+    const viewCounts = await prisma.movieSuggestion.groupBy({
+      by: ["movieId"],
+      where: {
+        movieId: {
+          in: movieIds,
+        },
+      },
+      _sum: {
+        viewCount: true,
+      },
+    });
+
+    // Create a map of movie ID to view count
+    const viewCountMap = new Map(
+      viewCounts.map((vc) => [vc.movieId, vc._sum.viewCount || 0])
+    );
+
+    // Add view counts to the related movies and sort by view count
+    const relatedMoviesWithViews = relatedMovies
+      .map((movie) => ({
+        ...movie,
+        viewCount: viewCountMap.get(parseInt(movie.id)) || 0,
+      }))
+      .sort((a, b) => b.viewCount - a.viewCount);
+
+    // Take the top 6 movies after sorting
+    const topRelatedMovies = relatedMoviesWithViews.slice(0, 10);
+
+    // Fetch all unique categories from the related movies
+    const allCategories = Array.from(
+      new Set(topRelatedMovies.flatMap((movie) => movie.categories))
+    );
+
+    res.status(200).json({
+      movies: topRelatedMovies,
+      allCategories: allCategories,
     });
   } catch (error) {
     console.error("Error fetching related movies:", error);
-    return res.status(500).json({ message: "Error fetching related movies" });
+    res.status(500).json({ message: "Error fetching related movies" });
   }
 };
-
 export const getAllGenres = async (
   req: Request,
   res: Response
@@ -671,5 +756,136 @@ export const getAllGenres = async (
   } catch (error) {
     console.error("Error fetching genres:", error);
     return res.status(500).json({ message: "Error fetching genres" });
+  }
+};
+
+export const addComment = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<Response> => {
+  try {
+    const { content, movieId } = commentSchema.parse(req.body);
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const comment = await prisma.comment.create({
+      data: {
+        content,
+        userId,
+        movieId,
+      },
+    });
+
+    return res
+      .status(201)
+      .json({ message: "Comment added successfully", comment });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      const errors = formatError(error);
+      return res.status(422).json({ message: "Invalid data", errors });
+    }
+    console.error("Error adding comment:", error);
+    return res.status(500).json({ message: "Something went wrong" });
+  }
+};
+
+export const updateComment = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<Response> => {
+  try {
+    const { id } = req.params;
+    const { content } = commentSchema.parse(req.body);
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const comment = await prisma.comment.findUnique({
+      where: { id: parseInt(id) },
+    });
+
+    if (!comment) {
+      return res.status(404).json({ message: "Comment not found" });
+    }
+
+    if (comment.userId !== userId) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
+    const updatedComment = await prisma.comment.update({
+      where: { id: parseInt(id) },
+      data: { content },
+    });
+
+    return res.json({
+      message: "Comment updated successfully",
+      comment: updatedComment,
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      const errors = formatError(error);
+      return res.status(422).json({ message: "Invalid data", errors });
+    }
+    console.error("Error updating comment:", error);
+    return res.status(500).json({ message: "Something went wrong" });
+  }
+};
+
+export const deleteComment = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<Response> => {
+  try {
+    const { id } = req.params;
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const comment = await prisma.comment.findUnique({
+      where: { id: parseInt(id) },
+    });
+
+    if (!comment) {
+      return res.status(404).json({ message: "Comment not found" });
+    }
+
+    if (comment.userId !== userId) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
+    await prisma.comment.delete({
+      where: { id: parseInt(id) },
+    });
+
+    return res.json({ message: "Comment deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting comment:", error);
+    return res.status(500).json({ message: "Something went wrong" });
+  }
+};
+
+export const getComments = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  try {
+    const { movieId } = req.params;
+    const comments = await prisma.comment.findMany({
+      where: { movieId: parseInt(movieId) },
+      include: { user: { select: { firstName: true, lastName: true } } },
+      orderBy: { createdAt: "desc" },
+    });
+
+    return res.json({ message: "Comments fetched successfully", comments });
+  } catch (error) {
+    console.error("Error fetching comments:", error);
+    return res.status(500).json({ message: "Something went wrong" });
   }
 };

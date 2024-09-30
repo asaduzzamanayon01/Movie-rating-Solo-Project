@@ -1,9 +1,9 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import Cookies from "js-cookie";
-import { toast } from "sonner";
+import { ToastContainer, toast } from "react-toastify";
 import { RingLoader } from "react-spinners";
 import {
   AlertDialog,
@@ -34,6 +34,7 @@ const MoviesPage = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [page, setPage] = useState<number>(1);
   const [totalMovies, setTotalMovies] = useState<number>(0);
+  const [hasMore, setHasMore] = useState<boolean>(true);
   const cookieUserId = Cookies.get("userId");
   const userIdFromUrl = searchParams.get("user");
   const pathname = usePathname();
@@ -42,77 +43,81 @@ const MoviesPage = () => {
   const [movieToDelete, setMovieToDelete] = useState<number | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Clear the movie list and reset the page when category changes
-  const fetchMovies = async (
-    page: number,
-    genre?: string,
-    user?: number,
-    query?: string
-  ) => {
-    try {
-      setLoading(true);
-      // Build the API URL with optional genre filter
-      let url = `http://localhost:8000/api/movies?page=${page}&limit=18 `;
-      if (genre) {
-        url += `&genre=${genre}`;
-      }
-      if (user) {
-        url += `&user=${user}`;
-      }
-      if (query) {
-        url += `&query=${query}`;
-      }
-
-      const response = await fetch(url);
-      const data = await response.json();
-
-      if (response.ok) {
-        if (page === 1) {
-          setMovies(data.movies); // Replace movies on the first page
-        } else {
-          setMovies((prevMovies) => [
-            ...prevMovies,
-            ...data.movies.filter(
-              (newMovie: Movie) => !prevMovies.some((m) => m.id === newMovie.id)
-            ),
-          ]); // Append new movies for additional pages
+  const observer = useRef<IntersectionObserver | null>(null);
+  const lastMovieElementRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      if (loading) return;
+      if (observer.current) observer.current.disconnect();
+      observer.current = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting && hasMore) {
+          setPage((prevPage) => prevPage + 1);
         }
-        setTotalMovies(data.totalMovies); // Total number of movies available
-      } else {
-        console.error("Failed to fetch movies");
-      }
-    } catch (error) {
-      console.error("Error fetching movies:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+      });
+      if (node) observer.current.observe(node);
+    },
+    [loading, hasMore]
+  );
 
-  // Fetch movies on initial load and whenever the URL query parameter changes
+  const fetchMovies = useCallback(
+    async (
+      pageNum: number,
+      genre?: string,
+      user?: number,
+      query?: string,
+      reset: boolean = false
+    ) => {
+      try {
+        setLoading(true);
+        let url = `http://localhost:8000/api/movies?page=${pageNum}&limit=18`;
+        if (genre) url += `&genre=${genre}`;
+        if (user) url += `&user=${user}`;
+        if (query) url += `&query=${query}`;
+
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (response.ok) {
+          setMovies((prevMovies) => {
+            if (reset) {
+              return data.movies;
+            }
+            const newMovies = data.movies.filter(
+              (newMovie: Movie) => !prevMovies.some((m) => m.id === newMovie.id)
+            );
+            return [...prevMovies, ...newMovies];
+          });
+          setTotalMovies(data.totalMovies);
+          setHasMore(data.movies.length === 18); // Assuming 18 is the page limit
+        } else {
+          console.error("Failed to fetch movies");
+        }
+      } catch (error) {
+        console.error("Error fetching movies:", error);
+      } finally {
+        setLoading(false);
+      }
+    },
+    []
+  );
+
   useEffect(() => {
     const genre = searchParams.get("genre");
-    const genreName = genre ?? undefined;
     const query = searchParams.get("query");
-    const queryName = query ?? undefined;
     const user = searchParams.get("user");
     const userId = user ? parseInt(user, 10) : undefined;
-    setMovies([]); // Clear movie list when category changes
     setPage(1);
-    fetchMovies(1, genreName, userId, queryName);
-  }, [searchParams, pathname]);
+    fetchMovies(1, genre ?? undefined, userId, query ?? undefined, true);
+  }, [searchParams, pathname, fetchMovies]);
 
-  const handleLoadMore = () => {
-    if (movies.length < totalMovies) {
-      setPage((prevPage) => prevPage + 1);
+  useEffect(() => {
+    if (page > 1) {
       const genre = searchParams.get("genre");
-      const genreName = genre ?? undefined;
       const query = searchParams.get("query");
-      const queryName = query ?? undefined;
       const user = searchParams.get("user");
       const userId = user ? parseInt(user, 10) : undefined;
-      fetchMovies(page + 1, genreName, userId, queryName); // Fetch movies for the next page
+      fetchMovies(page, genre ?? undefined, userId, query ?? undefined);
     }
-  };
+  }, [page, searchParams, fetchMovies]);
 
   const handleUpdate = (movieId: number) => {
     router.push(`update-movie/${movieId}`);
@@ -131,7 +136,7 @@ const MoviesPage = () => {
 
     try {
       const response = await fetch(
-        `http://localhost:8000/api/movie/delete/${movieToDelete}`,
+        `http://localhost:8000/api/movie/${movieToDelete}`,
         {
           method: "DELETE",
           headers: {
@@ -169,88 +174,91 @@ const MoviesPage = () => {
 
   return (
     <div className="bg-gradient-to-b from-gray-900 to-black min-h-screen">
+      <ToastContainer position="top-right" />
       <main className="container mx-auto p-5">
         <h1 className="text-4xl font-bold mb-8 text-left text-white">
           Movies List
         </h1>
         <motion.div
-          className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6"
+          className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6"
           initial={{ opacity: 0 }}
-          animate={{ opacity: 2 }}
+          animate={{ opacity: 1 }}
           transition={{ duration: 0.5 }}
         >
-          {movies.map((movie) => (
-            <motion.div
+          {movies.map((movie, index) => (
+            <div
               key={movie.id}
               className="bg-slate-800 rounded-lg shadow-lg overflow-hidden transform transition duration-300 hover:scale-105 flex flex-col h-full"
-              whileHover={{ y: -5 }}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.1 }}
+              ref={index === movies.length - 1 ? lastMovieElementRef : null}
             >
-              <img
-                onClick={() => router.push(`/movie/${movie.id}`)}
-                src={movie.image}
-                alt={movie.title}
-                className="w-full h-48 object-cover hover:cursor-pointer transition duration-300 hover:opacity-75"
-              />
-              <div className="p-4 bg-gray-800 rounded-b-lg shadow-md flex flex-col flex-grow">
-                <span className="text-yellow-500 font-bold">
-                  <Rating
-                    width={130}
-                    value={movie.averageRating ?? 0}
-                    readOnly={true}
-                  />
-                </span>
-                <h2
-                  className="font-bold text-lg text-white mt-1 line-clamp-2 hover:text-yellow-500 transition duration-300"
+              <div className="relative h-85">
+                <img
+                  src={movie.image}
+                  alt={movie.title}
+                  className="w-full h-[400px] object-cover hover:cursor-pointer transition duration-300 hover:opacity-75"
+                  onClick={() => router.push(`/movie/${movie.id}`)}
+                />
+                <div
+                  className="absolute inset-0 bg-gradient-to-t from-black to-transparent opacity-60"
+                  onClick={() => router.push(`/movie/${movie.id}`)}
+                />
+                <div
+                  className="absolute bottom-0 left-0 right-0 p-4 text-white"
                   onClick={() => router.push(`/movie/${movie.id}`)}
                 >
-                  {movie.title}
-                </h2>
-
-                <p className="text-sm text-gray-400">
-                  Opened {movie.releaseDate}
-                </p>
-
-                <div className="flex-grow"></div>
-
-                {cookieUserId && cookieUserId === userIdFromUrl && (
-                  <div className="flex justify-between mt-2 space-x-2">
-                    <Button
-                      variant="outline"
-                      className="flex-1 bg-yellow-500"
-                      onClick={() => handleUpdate(movie.id)}
-                    >
-                      Update
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      className="flex-1"
-                      onClick={() => handleDeleteMovie(movie.id)}
-                    >
-                      Delete
-                    </Button>
-                  </div>
-                )}
+                  <span
+                    className="text-yellow-500 font-bold"
+                    onClick={() => router.push(`/movie/${movie.id}`)}
+                  >
+                    <Rating
+                      width={130}
+                      value={movie.averageRating ?? 0}
+                      readOnly={true}
+                    />
+                  </span>
+                  <h2
+                    className="font-bold text-lg mt-1 line-clamp-2 hover:text-yellow-500 transition duration-300 cursor-pointer"
+                    onClick={() => router.push(`/movie/${movie.id}`)}
+                  >
+                    {movie.title}
+                  </h2>
+                  <p
+                    className="text-sm text-gray-300"
+                    onClick={() => router.push(`/movie/${movie.id}`)}
+                  >
+                    Opened {movie.releaseDate}
+                  </p>
+                </div>
               </div>
-            </motion.div>
+
+              {cookieUserId && cookieUserId === userIdFromUrl && (
+                <div className="flex justify-between p-2 space-x-2 bg-gray-800">
+                  <Button
+                    variant="outline"
+                    className="flex-1 bg-yellow-500"
+                    onClick={() => handleUpdate(movie.id)}
+                  >
+                    Update
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    className="flex-1"
+                    onClick={() => handleDeleteMovie(movie.id)}
+                  >
+                    Delete
+                  </Button>
+                </div>
+              )}
+            </div>
           ))}
         </motion.div>
       </main>
 
-      <div className="container mx-auto text-center py-8">
-        {movies.length < totalMovies && (
-          <Button
-            variant="secondary"
-            size="lg"
-            onClick={handleLoadMore}
-            className="px-6 py-3 text-lg text-white bg-yellow-600"
-          >
-            Load More
-          </Button>
-        )}
-      </div>
+      {loading && page > 1 && (
+        <div className="flex justify-center items-center py-4">
+          <RingLoader color="#FF0000" loading={loading} size={50} />
+        </div>
+      )}
 
       <AlertDialog
         open={isDeleteDialogOpen}
