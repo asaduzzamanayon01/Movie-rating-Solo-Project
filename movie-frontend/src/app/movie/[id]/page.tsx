@@ -337,7 +337,7 @@ const MovieDetailPage = () => {
               <img
                 src={movie.image}
                 alt={movie.title}
-                className="w-full h-72 object-cover rounded-lg shadow-lg"
+                className="w-full h-[400px] object-cover rounded-lg shadow-lg"
               />
 
               {/* Star Rating Component */}
