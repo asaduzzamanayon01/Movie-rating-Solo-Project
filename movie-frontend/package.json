@@ -33,7 +33,8 @@
     "sonner": "^1.5.0",
     "tailwind-merge": "^2.5.2",
     "tailwind-scrollbar-hide": "^1.1.7",
-    "tailwindcss-animate": "^1.0.7"
+    "tailwindcss-animate": "^1.0.7",
+    "toastify": "^2.0.1"
   },
   "devDependencies": {
     "@types/js-cookie": "^3.0.6",

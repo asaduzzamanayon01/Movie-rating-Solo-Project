@@ -2,11 +2,11 @@ const { Client: ElasticsearchClient } = require("@elastic/elasticsearch");
 import prisma from "./DB/db.config";
 
 const esClient = new ElasticsearchClient({
-  node: "https://localhost:9200/",
-  auth: {
-    username: "elastic",
-    password: "I16omnzaK0sHB8mj4YEL",
-  },
+  node: "http://localhost:9200/",
+//   auth: {
+//     username: "elastic",
+//     password: "I16omnzaK0sHB8mj4YEL",
+//   },
   tls: {
     rejectUnauthorized: false,
   },

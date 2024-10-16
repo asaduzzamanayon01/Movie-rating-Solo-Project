@@ -9,9 +9,9 @@ const seedMovies = async (): Promise<void> => {
     const genreIds = Array.from({ length: 15 }, (_, i) => i + 1); // Genre IDs from 1 to 15
 
     const moviesToInsert = [];
-    const batchSize = 10; // Adjust batch size as needed
+    const batchSize = 100; // Adjust batch size as needed
 
-    for (let i = 0; i < 300; i++) {
+    for (let i = 0; i < 500; i++) {
       const movieData = {
         title: `${faker.word.adjective()} ${faker.word.noun()} ${faker.number.int(
           { min: 1, max: 5 }

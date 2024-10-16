@@ -19,8 +19,8 @@ movieRoute.get("/movies/:id/related", movieController_1.getRelatedMovies);
 movieRoute.post("/movie-rate", authenticate_1.default, movieController_1.addRating);
 movieRoute.get("/genres", movieController_1.getAllGenres);
 //For comment
-movieRoute.post("/comments", authenticate_1.default, movieController_1.addComment);
-movieRoute.put("/comments/:id", authenticate_1.default, movieController_1.updateComment);
-movieRoute.delete("/comments/:id", authenticate_1.default, movieController_1.deleteComment);
-movieRoute.get("/comments/:movieId", movieController_1.getComments);
+// movieRoute.post("/comments", authMiddleware, addComment);
+// movieRoute.put("/comments/:id", authMiddleware, updateComment);
+// movieRoute.delete("/comments/:id", authMiddleware, deleteComment);
+// movieRoute.get("/comments/:movieId", getComments);
 exports.default = movieRoute;

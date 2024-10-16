@@ -8,10 +8,6 @@ import {
   getMovieById,
   getRelatedMovies,
   getAllGenres,
-  addComment,
-  updateComment,
-  deleteComment,
-  getComments,
   // searchMovies,
 } from "../controller/movieController";
 import authMiddleware from "../authenticate/authenticate";
@@ -33,9 +29,9 @@ movieRoute.post("/movie-rate", authMiddleware, addRating);
 movieRoute.get("/genres", getAllGenres);
 
 //For comment
-movieRoute.post("/comments", authMiddleware, addComment);
-movieRoute.put("/comments/:id", authMiddleware, updateComment);
-movieRoute.delete("/comments/:id", authMiddleware, deleteComment);
-movieRoute.get("/comments/:movieId", getComments);
+// movieRoute.post("/comments", authMiddleware, addComment);
+// movieRoute.put("/comments/:id", authMiddleware, updateComment);
+// movieRoute.delete("/comments/:id", authMiddleware, deleteComment);
+// movieRoute.get("/comments/:movieId", getComments);
 
 export default movieRoute;

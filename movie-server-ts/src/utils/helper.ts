@@ -12,6 +12,7 @@ export const imageValidator = (size: number, mime: string): string | null => {
   return null;
 };
 
+// Test
 export const bytesToMb = (bytes: number): number => {
   return bytes / (1024 * 1024);
 };
@@ -20,6 +21,7 @@ export const generateRandom = (): string => {
   return uuidv4();
 };
 
+// Test
 export const getImageUrl = (imgName: string): string => {
   return `${process.env.APP_URL}news/${imgName}`;
 };
